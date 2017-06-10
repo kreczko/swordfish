@@ -7,6 +7,7 @@ For full details see https://arxiv.org/abs/1704.05458
 
 Python 2.7 and 3.0
 
+
 ## How to Install
 
 ````PYTHON
@@ -17,6 +18,8 @@ or run
 ````PYTHON
 python setup.py
 ````
+
+
 ## Functions Available
 
 Function               | Description
