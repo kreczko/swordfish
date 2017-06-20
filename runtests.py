@@ -25,7 +25,7 @@ def main():
     exposure = np.ones(npix)*1e3
 
     model = RF.Fish(flux, noise, sigma, exposure)
-    F, I = RF.core.infoflux(model, solver="cg")
+    F, I = model.infoflux(solver="cg")
     F = RF.core.effective(F, I, 1)
 
     #hp.mollview(F)

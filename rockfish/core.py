@@ -14,17 +14,17 @@ class Fish(object):
         self.exposure = exposure
 
     def infomatrix(self, solver = "direct"):
-        D = opDiagonal(model.noise/model.exposure) + model.systematics
+        D = opDiagonal(self.noise/self.exposure) + model.systematics
         n = length(model.flux)
         x = np.zeros(n)
         if solver == "direct":
             invD = np.inv(np.full(D))
             for i in range(n):
-                x[i] = np.invD*model.flux[i]
+                x[i] = np.invD*self.flux[i]
         elif solver == "cg":
             for i in range(n):
                 Pl = np.diagonal(np.diagonal(D))
-                x[i] = la.cg(D, model.flux[i], Pl = Pl, verbose=True, maxiter=10)
+                x[i] = la.cg(D, self.flux[i], Pl = Pl, verbose=True, maxiter=10)
         else:
             error("Solver unknown.")
         I = np.zeros(n,n)
@@ -35,27 +35,39 @@ class Fish(object):
                 I[j,i] = tmp
         return I
 
-    def infoflux(self, solver = "direct", **kwargs):
-        D = opDiagonal(model.noise/model.exposure) + model.systematics
-        n = length(model.flux)
+    def infoflux(self, solver = "direct", maxiter = 10, **kwargs):
+        # D = np.zeros((len(self.noise), len(self.noise)))
+        # self.systematics is a linear operator therefore 
+        # TypeError: unsupported operand type(s) for +: 'NoneType' and '_ScaledLinearOperator'
+        # FIXME: Not actually be performing operations as we want
+        def D(x):
+            D_temp = np.zeros((len(self.noise), len(self.noise)))
+            np.fill_diagonal(D_temp, self.noise/self.exposure)
+            return D_temp.dot(np.ones(len(x)))
+        D_1 = la.LinearOperator((len(self.noise), len(self.noise)), matvec=D)
+        D = D_1 + self.systematics
+        #######################################
+        n = len(self.flux)
         x = np.zeros(n)
         if solver == "direct":
             invD = np.inv(full(D))
             for i in range(n):
-                x[i] = invD*model.flux[i]
+                x[i] = invD*self.flux[i]
         elif solver == "cg":
+            # FIXME: Not quite sure what this is doing right now
             for i in range(n):
-                x[i] = cg(D, model.flux[i], verbose=True, maxiter = maxiter)
+                y = la.cg(D, self.flux[i], maxiter = maxiter)
+                x[i] = np.array(y[0])
         else:
             raise KeyError("Solver unknown.")
         I = np.zeros(n,n)
         F = np.zeros(n,n)
         for i in range(n):
             for j in range(i):
-                tmp = x[i]*x[j]*model.noise/(model.exposure**2.)
+                tmp = x[i]*x[j]*self.noise/(self.exposure**2.)
                 F[i,j] = tmp
                 F[j,i] = tmp
-                tmp = sum(model.flux[i]*x[j])
+                tmp = sum(self.flux[i]*x[j])
                 I[i,j] = tmp
                 I[j,i] = tmp
         return F, I
@@ -111,11 +123,11 @@ def Sigma_hpx(nside, sigma=0., scale=1.):
     def hpxconvolve(x):
         if sigma != 0.:
             alm = hp.map2alm(x*scale)
-            x = hp.alm2map(alm, nside, sigma = deg2rad(sigma), verbose=false)
+            x = hp.alm2map(alm, nside, sigma = np.deg2rad(sigma), verbose=False)
             return x*scale
     def flat(x):
         return scale*sum(x*scale)
     if sigma == np.Inf:
-        return la.LinearOperator(npix, npix, True, True, lambda x: flat(x))
+        return la.LinearOperator((npix, npix), matvec = lambda x: flat(x))
     else:
-        return la.LinearOperator(npix, npix, True, True, lambda x: hpxconvolve(x))
+        return la.LinearOperator((npix, npix), matvec = lambda x: hpxconvolve(x))
