@@ -39,7 +39,7 @@ class Fish(object):
         # D = np.zeros((len(self.noise), len(self.noise)))
         # self.systematics is a linear operator therefore 
         # TypeError: unsupported operand type(s) for +: 'NoneType' and '_ScaledLinearOperator'
-        # FIXME: Not actually be performing operations as we want
+        # FIXME: Not checked if this is actually performing operations as we want
         def D(x):
             D_temp = np.zeros((len(self.noise), len(self.noise)))
             np.fill_diagonal(D_temp, self.noise/self.exposure)
@@ -48,7 +48,8 @@ class Fish(object):
         D = D_1 + self.systematics
         #######################################
         n = len(self.flux)
-        x = np.zeros(n)
+        # x = np.zeros((n,len(self.flux[0])))
+        x = np.empty(shape=(n,), dtype=object)    
         if solver == "direct":
             invD = np.inv(full(D))
             for i in range(n):
@@ -56,12 +57,14 @@ class Fish(object):
         elif solver == "cg":
             # FIXME: Not quite sure what this is doing right now
             for i in range(n):
-                y = la.cg(D, self.flux[i], maxiter = maxiter)
-                x[i] = np.array(y[0])
+                # Note: la.cg has tuple output so we just take result i.e. [0]
+                x[i] = la.cg(D, self.flux[i], maxiter = maxiter)[0]
         else:
             raise KeyError("Solver unknown.")
-        I = np.zeros(n,n)
-        F = np.zeros(n,n)
+        I = np.empty(shape=(n,n), dtype=object)    
+        F = np.empty(shape=(n,n), dtype=object)    
+        # I = np.zeros((n,n,len(self.flux[0])))
+        # F = np.zeros((n,n,len(self.flux[0])))
         for i in range(n):
             for j in range(i):
                 tmp = x[i]*x[j]*self.noise/(self.exposure**2.)
@@ -81,9 +84,10 @@ def effective(F, I, i):
     if n == 1:
         return F[i,i]
     indices = np.setdiff1d(range(n), i)
+    # Code now runs till here :)
     eff_F = F[i,i]
     C = np.zeros(n-1)
-    B = np.zeros(n-1,n-1)
+    B = np.zeros((n-1,n-1))
     for j in range(n):
         C[j] = I[indices[j],i]
         for k in range(n-1):
