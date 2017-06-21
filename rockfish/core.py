@@ -79,9 +79,10 @@ def effective(F, I, i):
     if n == 1:
         return F[i,i]
     indices = np.setdiff1d(range(n), i)
+    # Code now runs till here :)
     eff_F = F[i,i]
     C = np.zeros(n-1)
-    B = np.zeros(n-1,n-1)
+    B = np.zeros((n-1,n-1))
     for j in range(n):
         C[j] = I[indices[j],i]
         for k in range(n-1):
