@@ -5,65 +5,63 @@ from __future__ import division
 import healpy as hp
 import numpy as np
 import scipy.sparse.linalg as la
+import scipy.sparse as sp
 
 class Fish(object):
     def __init__(self, flux, noise, systematics, exposure):
         self.flux = flux
         self.noise = noise
-        self.systematics = systematics
+        self.systematics = la.aslinearoperator(systematics)
         self.exposure = exposure
 
-    def infomatrix(self, solver = "direct"):
-        D = opDiagonal(self.noise/self.exposure) + model.systematics
-        n = length(model.flux)
-        x = np.zeros(n)
+    def infomatrix(self, solver = "direct", **kwargs):
+        n = len(self.flux)   # Number of flux components
+        N = len(self.noise)  # Number of bins
+        D = (
+                la.aslinearoperator(sp.diags(self.noise/self.exposure))
+                + self.systematics
+                )
+        x = np.zeros((n, N))
         if solver == "direct":
-            invD = np.inv(np.full(D))
+            dense = D(np.eye(N))
+            invD = np.linalg.linalg.inv(dense)
             for i in range(n):
-                x[i] = np.invD*self.flux[i]
+                x[i] = np.dot(invD, self.flux[i])
         elif solver == "cg":
             for i in range(n):
-                Pl = np.diagonal(np.diagonal(D))
-                x[i] = la.cg(D, self.flux[i], Pl = Pl, verbose=True, maxiter=10)
+                x[i] = la.cg(D, self.flux[i], **kwargs)[0]
         else:
-            error("Solver unknown.")
-        I = np.zeros(n,n)
+            raise KeyError("Solver unknown.")
+        I = np.zeros((n,n))
         for i in range(n):
-            for j in range(i):
-                tmp = sum(model.flux[i]*x[j])
+            for j in range(i+1):
+                tmp = sum(self.flux[i]*x[j])
                 I[i,j] = tmp
                 I[j,i] = tmp
         return I
 
-    def infoflux(self, solver = "direct", maxiter = 10, **kwargs):
-        # D = np.zeros((len(self.noise), len(self.noise)))
-        # self.systematics is a linear operator therefore 
-        # TypeError: unsupported operand type(s) for +: 'NoneType' and '_ScaledLinearOperator'
-        # FIXME: Not actually be performing operations as we want
-        def D(x):
-            D_temp = np.zeros((len(self.noise), len(self.noise)))
-            np.fill_diagonal(D_temp, self.noise/self.exposure)
-            return D_temp.dot(np.ones(len(x)))
-        D_1 = la.LinearOperator((len(self.noise), len(self.noise)), matvec=D)
-        D = D_1 + self.systematics
-        #######################################
-        n = len(self.flux)
-        x = np.zeros(n)
+    def infoflux(self, solver = "direct", **kwargs):
+        n = len(self.flux)   # Number of flux components
+        N = len(self.noise)  # Number of bins
+        D = (
+                la.aslinearoperator(sp.diags(self.noise/self.exposure))
+                + self.systematics
+                )
+        x = np.zeros((n, N))
         if solver == "direct":
-            invD = np.inv(full(D))
+            dense = D(np.eye(N))
+            invD = np.linalg.linalg.inv(dense)
             for i in range(n):
-                x[i] = invD*self.flux[i]
+                x[i] = np.dot(invD, self.flux[i])
         elif solver == "cg":
-            # FIXME: Not quite sure what this is doing right now
             for i in range(n):
-                y = la.cg(D, self.flux[i], maxiter = maxiter)
-                x[i] = np.array(y[0])
+                x[i] = la.cg(D, self.flux[i], **kwargs)[0]
         else:
             raise KeyError("Solver unknown.")
-        I = np.zeros(n,n)
-        F = np.zeros(n,n)
+        I = np.zeros((n,n))
+        F = np.zeros((n,n,N))
         for i in range(n):
-            for j in range(i):
+            for j in range(i+1):
                 tmp = x[i]*x[j]*self.noise/(self.exposure**2.)
                 F[i,j] = tmp
                 F[j,i] = tmp
