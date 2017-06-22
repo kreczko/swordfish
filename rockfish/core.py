@@ -7,7 +7,7 @@ import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
 
-class Rockfish(object):
+class Model(object):
     def __init__(self, flux, noise, systematics, exposure):
         self.flux = flux
         self.noise = noise
@@ -97,6 +97,43 @@ class Rockfish(object):
                     for m in range(n-1):
                         eff_F = eff_F + C[j]*invB[j,l]*F[indices[l],indices[m]]*invB[m,k]*C[k]
         return eff_F
+
+class EffectiveCounts(object):
+    def __init__(self, rfmodel):
+        self.rfmodel = rfmodel
+
+    def effectivecounts(self, i, theta):
+        I = self.rfmodel.effectiveinfomatrix(i)
+        noise = self.rfmodel.noise - self.flux[i]
+        I0 = self.rfmodel.effectiveinfomatrix(i, noise = noise)
+        s = 1/(1/I-1/I0)
+        b = 1/I/(1/I-1/I0)**2
+        return s, b
+
+    def upperlimit(self, alpha, i, gaussian = False):
+        Z = Z(alpha)
+        I = self.effectiveinfomatrix(i)
+        if gaussian:
+            return Z/sqrt(I)
+        else:
+            I0 = self.effectiveinfomatrix(i, noise = self.noise - self.flux[i])
+            if (I-I0)<0.01*I:
+                return Z/sqrt(I)
+            else:
+                raise NotImplemented()
+
+    def discoveryreach(self, alpha, i, gaussian = False):
+        raise NotImplemented()
+
+class Visualization(object):
+    def __init__(self, xy, I11, I22, I12):
+        pass
+
+    def plot(self):
+        pass
+
+    def integrate(self):
+        pass
 
 def tensorproduct(Sigma1, Sigma2):
     Sigma1 = la.aslinearoperator(Sigma1)

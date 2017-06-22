@@ -1,1 +1,1 @@
-from rockfish.core import Fish
+from rockfish.core import Rockfish
