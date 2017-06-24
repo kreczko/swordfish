@@ -19,6 +19,7 @@ class Model(object):
         self.ncomp = len(self.flux)   # Number of flux components
 
     def solveD(self, theta = None, psi = 1.):
+        # FIXME: Cache results
         noise = self.noise
         exposure = self.exposure*psi
         if theta is not None: 
@@ -40,7 +41,6 @@ class Model(object):
         else:
             raise KeyError("Solver unknown.")
         return x, noise, exposure
-
 
     def fishermatrix(self, theta = None, psi = 1.):
         x, noise, exposure = self.solveD(theta=theta, psi=psi)
