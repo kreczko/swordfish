@@ -8,15 +8,19 @@ import scipy.sparse.linalg as la
 import scipy.sparse as sp
 
 class Model(object):
-    def __init__(self, flux, noise, systematics, exposure, constraints):
+    def __init__(self, flux, noise, systematics, exposure):
         self.flux = flux
         self.noise = noise
-        self.systematics = la.aslinearoperator(systematics)
         self.exposure = exposure
 
         self.solver = "direct"
         self.nbins = len(self.noise)  # Number of bins
         self.ncomp = len(self.flux)   # Number of flux components
+        if systematics is not None:
+            self.systematics = la.aslinearoperator(systematics)
+        else:
+            self.systematics = la.LinearOperator(
+                    (self.nbins, self.nbins), matvec = lambda x: x*0.)
 
     def solveD(self, theta = None, psi = 1.):
         # FIXME: Cache results
@@ -33,10 +37,10 @@ class Model(object):
         if self.solver == "direct":
             dense = D(np.eye(self.nbins))
             invD = np.linalg.linalg.inv(dense)
-            for i in range(n):
+            for i in range(self.ncomp):
                 x[i] = np.dot(invD, self.flux[i])
         elif self.solver == "cg":
-            for i in range(n):
+            for i in range(self.ncomp):
                 x[i] = la.cg(D, self.flux[i], **kwargs)[0]
         else:
             raise KeyError("Solver unknown.")
@@ -44,8 +48,8 @@ class Model(object):
 
     def fishermatrix(self, theta = None, psi = 1.):
         x, noise, exposure = self.solveD(theta=theta, psi=psi)
-        I = np.zeros((self.n,self.n))
-        for i in range(self.n):
+        I = np.zeros((self.ncomp,self.ncomp))
+        for i in range(self.ncomp):
             for j in range(i+1):
                 tmp = sum(self.flux[i]*x[j])
                 I[i,j] = tmp

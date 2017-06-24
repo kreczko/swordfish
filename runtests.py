@@ -5,10 +5,11 @@ from __future__ import division
 import healpy as hp
 import numpy as np
 import scipy.sparse.linalg as la
-import rockfish as RF
+import rockfish as rf
+import pylab as plt
 
 def main():
-    nside = 32
+    nside = 16
     npix = hp.nside2npix(nside)
     lon, lat = hp.pix2ang(nside, range(npix))
     lon = np.mod(lon+180, 360)-180
@@ -21,22 +22,22 @@ def main():
 
     flux = [sig, sig2]
     noise = bkg
-    sigma = RF.core.Sigma_hpx(nside, sigma=10.)*0.01
+    sigma = rf.core.Sigma_hpx(nside, sigma=10.)*0.01
+    #sigma = None
     exposure = np.ones(npix)*1e3
 
-    model = RF.Fish(flux, noise, sigma, exposure)
-    F, I = model.infoflux(solver="cg")
-    F = RF.core.effective(F, I, 1)
+    model = rf.Model(flux, noise, sigma, exposure)
+    F = model.effectiveinfoflux(0)
 
-    #hp.mollview(F)
+    hp.mollview(F)
 
-    q = quantile(F, WeightVec(F), 0.05)
-    mask = F > q
-    hp.mollview(mask, min = 0, max = 1)
+    #q = quantile(F, WeightVec(F), 0.05)
+    #mask = F > q
+    #hp.mollview(mask, min = 0, max = 1)
 
-    savefig("test.eps")
+    plt.savefig("test.eps")
 
-    return true
+    return True
 
 if __name__ == "__main__":
     main()
