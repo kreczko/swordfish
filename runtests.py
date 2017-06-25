@@ -8,7 +8,7 @@ import scipy.sparse.linalg as la
 import rockfish as RF
 
 def main():
-    nside = 32
+    nside = 16
     npix = hp.nside2npix(nside)
     lon, lat = hp.pix2ang(nside, range(npix))
     lon = np.mod(lon+180, 360)-180
@@ -24,9 +24,9 @@ def main():
     sigma = RF.core.Sigma_hpx(nside, sigma=10.)*0.01
     exposure = np.ones(npix)*1e3
 
-    model = RF.Fish(flux, noise, sigma, exposure)
+    model = RF.Rockfish(flux, noise, sigma, exposure)
     F, I = model.infoflux(solver="cg")
-    F = RF.core.effective(F, I, 1)
+    F = model.effectiveinfoflux(1)
 
     #hp.mollview(F)
 
