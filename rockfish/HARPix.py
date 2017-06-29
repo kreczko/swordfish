@@ -8,12 +8,33 @@ import pylab as plt
 import scipy.sparse as sp
 from copy import deepcopy
 
-class ARPix():
+# Hierarchical Adaptive Resolution Pixelization of the Sphere
+# A thin python wrapper around healpix
+
+class HARPix():
     def __init__(self, verbose = True):
         self.ipix = np.empty((0,), dtype=np.int64)
         self.order = np.empty((0,), dtype=np.int8)
         self.data = np.empty((0,), dtype=np.float64)
         self.verbose = verbose
+
+    def print_info(self):
+        print "Number of pixels: %i"%len(self.data)
+        print "Minimum nside:    %i"%hp.order2nside(min(self.order))
+        print "Maximum nside:    %i"%hp.order2nside(max(self.order))
+        return self
+
+    def add_peak(self, vec, r0, r1, n = 100):
+        sr0 = np.deg2rad(r0)**2*np.pi/n
+        sr1 = np.deg2rad(r1)**2*np.pi/n
+        order0 = int(np.log(4*np.pi/12/sr0)/np.log(4))+1
+        order1 = int(np.log(4*np.pi/12/sr1)/np.log(4))+1
+        for o in range(order1, order0+1):
+            r = r1/2**(o-order1)
+            nside = hp.order2nside(o)
+            self.add_disc(vec, r, nside, clean = False)
+        self.clean()
+        return self
 
     def add_ipix(self, ipix, order, clean = True, fill = 0., insert = False):
         if insert:
@@ -26,8 +47,12 @@ class ARPix():
             self.data = np.append(self.data, np.ones(len(ipix))*fill)
         if clean:
             self.clean()
+        return self
 
     def add_disc(self, vec, radius, nside, clean = True, fill = 0.):
+        if len(vec) == 2:
+            vec = hp.ang2vec(vec[0], vec[1], lonlat=True)
+        radius = np.deg2rad(radius)
         order = hp.nside2order(nside)
         ipix = hp._query_disc.query_disc(nside, vec, radius, nest=True)
         self.ipix = np.append(self.ipix, ipix)
@@ -36,6 +61,7 @@ class ARPix():
         if self.verbose: print "add_disc:", len(ipix)
         if clean:
             self.clean()
+        return self
 
     def add_polygon(self, vertices, nside, clean = True, fill = 0.):
         order = hp.nside2order(nside)
@@ -46,8 +72,9 @@ class ARPix():
         if self.verbose: print "add_polygon:", len(ipix)
         if clean:
             self.clean()
+        return self
 
-    def map_to_healpix(self, nside):
+    def get_trans_matrix(self, nside):
         if self.verbose: print "full"
         npix = hp.nside2npix(nside)
         fullorder = hp.nside2order(nside)
@@ -87,8 +114,8 @@ class ARPix():
         M = M.tocsr()
         return M
 
-    def to_heaplpix(self, nside):
-        M = self.map_to_healpix(nside)
+    def get_heaplpix(self, nside):
+        M = self.get_trans_matrix(nside)
         return M.dot(self.data)
 
     def clean(self):
@@ -140,6 +167,7 @@ class ARPix():
         self.ipix = np.array(clean_ipix)
         self.data = np.array(clean_data)
         self.order = np.array(clean_order)
+        return self
 
     def __iadd__(self, other):
         print "+:", len(self.data), len(other.data)
@@ -151,7 +179,7 @@ class ARPix():
         return self
 
     def __mul__(self, other):
-        if isinstance(other, ARPix):
+        if isinstance(other, HARPix):
             h1 = deepcopy(self)
             h2 = deepcopy(other)
             h1.add_ipix(other.ipix, other.order, insert=True)
@@ -164,26 +192,97 @@ class ARPix():
     def __add__(self, other):
         """Add to dense map."""
         if self.verbose: print "add"
-        if isinstance(other, ARPix):
+        if isinstance(other, HARPix):
             h = deepcopy(self)
             h += other
             return h
         else:
             raise NotImplementedError
 
+    def remove_zeros(self):
+        mask = self.data != 0.
+        self.ipix = self.ipix[mask]
+        self.data = self.data[mask]
+        self.order = self.order[mask]
+        return self
+
+    def get_area(self):
+        """Return area covered by map in steradian."""
+        sr = 4*np.pi/12*4.**-self.order
+        return sum(sr)
+
+    def get_integral(self):
+        """Return area covered by map in steradian."""
+        sr = 4*np.pi/12*4.**-self.order
+        return sum(sr*self.data)
+
+    def mul_sr(self):
+        sr = 4*np.pi/12*4.**-self.order
+        self.data *= sr
+        return self
+
+    def div_sr(self):
+        sr = 4*np.pi/12*4.**-self.order
+        self.data /= sr
+        return self
+
+    def mul_func(self, func, mode = 'lonlat', **kwargs):
+        values = self._evalulate(func, mode = mode, **kwargs)
+        self.data *= values
+        return self
+
+    def add_func(self, func, mode = 'lonlat', **kwargs):
+        values = self._evalulate(func, mode = mode, **kwargs)
+        self.data += values
+        return self
+
+    def _evalulate(self, func, mode = 'lonlat', center = None):
+        if mode == 'lonlat':
+            lon, lat = self.get_lonlat()
+            values = func(lon, lat)
+        elif mode == 'dist':
+            dist = self.get_dist(center[0], center[1])
+            values = func(dist)
+        else:
+            raise KeyError("Mode unknown.")
+        return values
+
+    def apply_mask(self, mask_func, mode = 'lonlat'):
+        self.mul(mask_func, mode = mode)
+        self.remove_zeros()
+        return self
+
+    def get_dist(self, lon, lat):
+        lonV, latV = self.get_lonlat()
+        dist = hp.rotator.angdist([lon, lat], [lonV, latV], lonlat=True)
+        return dist
+
+    def get_lonlat(self):
+        orders = np.unique(self.order)
+        lon = np.zeros(len(self.data))
+        lat = np.zeros(len(self.data))
+        for o in orders:
+            nside = hp.order2nside(o)
+            mask = self.order == o
+            ipix = self.ipix[mask]
+            lon[mask], lat[mask] = hp.pix2ang(nside, ipix, nest = True, lonlat = True)
+        lon = np.mod(lon+180, 360) - 180
+        return lon, lat
+
 def test():
-    h = ARPix()
-    h.add_disc((1, -0.1, 0), 10.4, 1, fill = 1)
-    for i in range(100):
-        print i
-        h1 = ARPix()
-        vec = np.random.random(3)*2-1
-        h1.add_disc(vec, 0.01, 1024, fill = 1)
-        h1.add_disc(vec, 0.1, 16, fill = 1)
-        h += h1
-    h.data = np.random.random(len(h.data))
-    m = h.to_heaplpix(256)
-    hp.mollview(m, nest = True, cmap='prism')
+    h = HARPix()
+    #h.add_disc((0, 0), 30.0, 16, fill = 0)
+    #h += HARPix().add_disc((0, 0), 20.0, 512, fill = 1)
+    #h += HARPix().add_disc((0, 0), 20.0, 512)
+    #h.mask(lambda l, b: abs(b) < 20)
+    lonlat = (40, 10)
+    h.add_peak(lonlat, .001, 10)
+    h.add_func(lambda dist: 1/(dist+0.0000), mode = 'dist', center = lonlat)
+    #h.data = np.random.random(len(h.data))
+    h.print_info()
+    m = h.get_heaplpix(1024)
+    print h.get_integral()
+    hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
