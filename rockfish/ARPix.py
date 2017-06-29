@@ -4,11 +4,12 @@
 from __future__ import division
 import numpy as np
 import healpy as hp
-import pylab as pl
+import pylab as plt
+import scipy.sparse as sp
 from copy import deepcopy
 
 class ARPix():
-    def __init__(self, verbose = False):
+    def __init__(self, verbose = True):
         self.ipix = np.empty((0,), dtype=np.int64)
         self.order = np.empty((0,), dtype=np.int8)
         self.data = np.empty((0,), dtype=np.float64)
@@ -27,47 +28,68 @@ class ARPix():
             self.clean()
 
     def add_disc(self, vec, radius, nside, clean = True, fill = 0.):
-        if self.verbose: print "add_disc"
         order = hp.nside2order(nside)
         ipix = hp._query_disc.query_disc(nside, vec, radius, nest=True)
         self.ipix = np.append(self.ipix, ipix)
         self.data = np.append(self.data, np.ones(len(ipix))*fill)
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
+        if self.verbose: print "add_disc:", len(ipix)
         if clean:
             self.clean()
 
     def add_polygon(self, vertices, nside, clean = True, fill = 0.):
-        if self.verbose: print "add_polygon"
         order = hp.nside2order(nside)
         ipix = hp._query_disc.query_polygon(nside, vertices, nest=True)
         self.ipix = np.append(self.ipix, ipix)
         self.data = np.append(self.data, np.ones(len(ipix))*fill)
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
+        if self.verbose: print "add_polygon:", len(ipix)
         if clean:
             self.clean()
 
-    def to_heaplpix(self, nside):
+    def map_to_healpix(self, nside):
         if self.verbose: print "full"
         npix = hp.nside2npix(nside)
         fullorder = hp.nside2order(nside)
         fullmap = np.zeros(npix)
+        N = len(self.data)
+
+        # COO matrix setup
+        row =  []
+        col =  []
+        data = []
+        shape = (npix, N)
+        num = np.arange(N)
 
         for o in np.unique(self.order):
             mask = self.order == o
             if o > fullorder:
                 idx = self.ipix[mask] >> (o-fullorder)*2
-                dat = self.data[mask] / 4**(o-fullorder)
-                np.add.at(fullmap, idx, dat)  
+                dat = np.ones(len(idx)) / 4**(o-fullorder)
+                row.extend(idx)
+                col.extend(num[mask])
+                data.extend(dat)
             elif o == fullorder:
                 idx = self.ipix[mask]
-                dat = self.data[mask]
-                np.add.at(fullmap, idx, dat)  
+                dat = np.ones(len(idx))
+                row.extend(idx)
+                col.extend(num[mask])
+                data.extend(dat)
             elif o < fullorder:
                 idx = self.ipix[mask] << -(o-fullorder)*2
-                dat = self.data[mask]
+                dat = np.ones(len(idx))
                 for i in range(0, 4**(fullorder-o)):
-                    np.add.at(fullmap, idx+i, dat)  
-        return fullmap
+                    row.extend(idx+i)
+                    col.extend(num[mask])
+                    data.extend(dat)
+
+        M = sp.coo_matrix((data, (row, col)), shape = shape)
+        M = M.tocsr()
+        return M
+
+    def to_heaplpix(self, nside):
+        M = self.map_to_healpix(nside)
+        return M.dot(self.data)
 
     def clean(self):
         if self.verbose: print "clean"
@@ -120,10 +142,12 @@ class ARPix():
         self.order = np.array(clean_order)
 
     def __iadd__(self, other):
+        print "+:", len(self.data), len(other.data)
         self.data = np.append(self.data, other.data)
         self.ipix = np.append(self.ipix, other.ipix)
         self.order = np.append(self.order, other.order)
         self.clean()
+        print "+:", len(self.data)
         return self
 
     def __mul__(self, other):
@@ -148,26 +172,19 @@ class ARPix():
             raise NotImplementedError
 
 def test():
-    h1 = ARPix()
-    h1.add_disc((1, -0.1, 0), 10.4, 128, fill = 1)
-    #h1.data[:] = np.random.random(len(h1.data))
-
-    h2 = ARPix()
-    h2.add_disc((1, 0.5, 0), 0.12, 1024, fill = 2)
-
-    h = h2
-
-    h = h1 + h2
-
+    h = ARPix()
+    h.add_disc((1, -0.1, 0), 10.4, 1, fill = 1)
+    for i in range(100):
+        print i
+        h1 = ARPix()
+        vec = np.random.random(3)*2-1
+        h1.add_disc(vec, 0.01, 1024, fill = 1)
+        h1.add_disc(vec, 0.1, 16, fill = 1)
+        h += h1
     h.data = np.random.random(len(h.data))
-
-    for i in range(10):
-        print i, len(h.data)
-        h.clean()
-
     m = h.to_heaplpix(256)
-    hp.mollview(m, nest = True, cmap='gnuplot')
-    pl.savefig('test.eps')
+    hp.mollview(m, nest = True, cmap='prism')
+    plt.savefig('test.eps')
 
 if __name__ == "__main__":
     test()
