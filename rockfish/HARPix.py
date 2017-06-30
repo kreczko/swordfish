@@ -6,17 +6,32 @@ import numpy as np
 import healpy as hp
 import pylab as plt
 import scipy.sparse as sp
+import inspect
 from copy import deepcopy
 
 # Hierarchical Adaptive Resolution Pixelization of the Sphere
 # A thin python wrapper around healpix
 
 class HARPix():
-    def __init__(self, verbose = True):
+    def __init__(self, verbose = False, dims = ()):
         self.ipix = np.empty((0,), dtype=np.int64)
         self.order = np.empty((0,), dtype=np.int8)
-        self.data = np.empty((0,), dtype=np.float64)
+        self.dims = dims
+        self.data = np.empty((0,)+self.dims, dtype=np.float64)
         self.verbose = verbose
+
+    @classmethod
+    def from_healpix(cls, m):
+        npix = len(m)
+        nside = hp.npix2nside(npix)
+        order = hp.nside2order(nside)
+
+        dims = np.shape(m[0])
+        r = cls(dims = dims)
+        r.data = m
+        r.ipix = np.arange(npix, dtype=np.int64)
+        r.order = np.ones(npix, dtype=np.int8)*order
+        return r
 
     def print_info(self):
         print "Number of pixels: %i"%len(self.data)
@@ -40,14 +55,30 @@ class HARPix():
         if insert:
             self.ipix = np.append(ipix, self.ipix)
             self.order = np.append(order, self.order)
-            self.data = np.append(np.ones(len(ipix))*fill, self.data)
+            self.data = np.append(np.ones((len(ipix),)+self.dims)*fill,
+                    self.data, axis=0)
         else:
             self.ipix = np.append(self.ipix, ipix)
             self.order = np.append(self.order, order)
-            self.data = np.append(self.data, np.ones(len(ipix))*fill)
+            self.data = np.append(self.data,
+                    np.ones((len(ipix),)+self.dims)*fill, axis=0)
         if clean:
             self.clean()
         return self
+
+    def add_iso(self, nside = 1, clean = True, fill = 0.):
+        order = hp.nside2order(nside)
+        npix = hp.nside2npix(nside)
+        ipix = np.arange(0, npix)
+        self.ipix = np.append(self.ipix, ipix)
+        self.data = np.append(self.data,
+                np.ones((len(ipix),)+self.dims)*fill, axis=0)
+        self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
+        if self.verbose: print "add_disc:", len(ipix)
+        if clean:
+            self.clean()
+        return self
+
 
     def add_disc(self, vec, radius, nside, clean = True, fill = 0.):
         if len(vec) == 2:
@@ -56,7 +87,8 @@ class HARPix():
         order = hp.nside2order(nside)
         ipix = hp._query_disc.query_disc(nside, vec, radius, nest=True)
         self.ipix = np.append(self.ipix, ipix)
-        self.data = np.append(self.data, np.ones(len(ipix))*fill)
+        self.data = np.append(self.data,
+                np.ones((len(ipix),)+self.dims)*fill, axis=0)
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
         if self.verbose: print "add_disc:", len(ipix)
         if clean:
@@ -67,7 +99,8 @@ class HARPix():
         order = hp.nside2order(nside)
         ipix = hp._query_disc.query_polygon(nside, vertices, nest=True)
         self.ipix = np.append(self.ipix, ipix)
-        self.data = np.append(self.data, np.ones(len(ipix))*fill)
+        self.data = np.append(self.data,
+                np.ones((len(ipix),)+self.dims)*fill, axis=0)
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
         if self.verbose: print "add_polygon:", len(ipix)
         if clean:
@@ -114,9 +147,18 @@ class HARPix():
         M = M.tocsr()
         return M
 
-    def get_heaplpix(self, nside):
+    def get_heaplpix(self, nside, idxs = ()):
         M = self.get_trans_matrix(nside)
-        return M.dot(self.data)
+        if idxs == ():
+            return M.dot(self.data)
+        elif len(idxs) == 1:
+            return M.dot(self.data[:,idxs[0]])
+        elif len(idxs) == 2:
+            return M.dot(self.data[:,idxs[0], idxs[1]])
+        elif len(idxs) == 3:
+            return M.dot(self.data[:,idxs[0], idxs[1], idxs[2]])
+        else:
+            raise NotImplementedError()
 
     def clean(self):
         if self.verbose: print "clean"
@@ -137,32 +179,32 @@ class HARPix():
                 clean_data1 = spill_data[unsubbed]
                 spill_ipix1 = np.repeat(spill_ipix[~unsubbed] << 2, 4)
                 spill_ipix1 += np.tile(np.arange(4), int(len(spill_ipix1)/4))
-                spill_data1 = np.repeat(spill_data[~unsubbed], 4)
+                spill_data1 = np.repeat(spill_data[~unsubbed], 4, axis=0)
             else:
                 clean_ipix1 = np.empty((0,), dtype=np.int64)
-                clean_data1 = np.empty((0,), dtype=np.float64)
+                clean_data1 = np.empty((0,)+self.dims, dtype=np.float64)
                 spill_ipix1 = np.empty((0,), dtype=np.int64)
-                spill_data1 = np.empty((0,), dtype=np.float64)
+                spill_data1 = np.empty((0,)+self.dims, dtype=np.float64)
 
             unsubbed = np.in1d(self.ipix[mask], sub_ipix, invert = True)
             clean_ipix2 = self.ipix[mask][unsubbed]
             clean_data2 = self.data[mask][unsubbed]
             spill_ipix2 = np.repeat(self.ipix[mask][~unsubbed] << 2, 4)
             spill_ipix2 += np.tile(np.arange(4), int(len(spill_ipix2)/4))
-            spill_data2 = np.repeat(self.data[mask][~unsubbed], 4)
+            spill_data2 = np.repeat(self.data[mask][~unsubbed], 4, axis=0)
 
             clean_ipix_mult = np.append(clean_ipix1, clean_ipix2)
-            clean_data_mult = np.append(clean_data1, clean_data2)
+            clean_data_mult = np.append(clean_data1, clean_data2, axis=0)
             clean_ipix_sing, inverse = np.unique(clean_ipix_mult,
                     return_inverse = True)
-            clean_data_sing = np.zeros(len(clean_ipix_sing))
+            clean_data_sing = np.zeros((len(clean_ipix_sing),)+self.dims)
             np.add.at(clean_data_sing, inverse, clean_data_mult)
             clean_ipix.extend(clean_ipix_sing)
             clean_data.extend(clean_data_sing)
             clean_order.extend(np.ones(len(clean_ipix_sing), dtype=np.int8)*o)
 
             spill_ipix = np.append(spill_ipix1, spill_ipix2)
-            spill_data = np.append(spill_data1, spill_data2)
+            spill_data = np.append(spill_data1, spill_data2, axis=0)
 
         self.ipix = np.array(clean_ipix)
         self.data = np.array(clean_data)
@@ -170,12 +212,10 @@ class HARPix():
         return self
 
     def __iadd__(self, other):
-        print "+:", len(self.data), len(other.data)
-        self.data = np.append(self.data, other.data)
+        self.data = np.append(self.data, other.data, axis=0)
         self.ipix = np.append(self.ipix, other.ipix)
         self.order = np.append(self.order, other.order)
         self.clean()
-        print "+:", len(self.data)
         return self
 
     def __mul__(self, other):
@@ -237,12 +277,27 @@ class HARPix():
         return self
 
     def _evalulate(self, func, mode = 'lonlat', center = None):
+        nargs = len(inspect.getargspec(func).args)
+        signature = "()"
+        signature += ",()"*(nargs-1)
+        signature += "->"
+        if self.dims== ():
+            signature += "()" 
+        elif len(self.dims) == 1:
+            signature += "(n)"
+        elif len(self.dims) == 2:
+            signature += "(n,m)"
+        elif len(self.dims) == 3:
+            signature += "(n,m,k)"
+        else:
+            raise NotImplementedError()
+        f = np.vectorize(func, signature = signature)
         if mode == 'lonlat':
             lon, lat = self.get_lonlat()
-            values = func(lon, lat)
+            values = f(lon, lat)
         elif mode == 'dist':
             dist = self.get_dist(center[0], center[1])
-            values = func(dist)
+            values = f(dist)
         else:
             raise KeyError("Mode unknown.")
         return values
@@ -270,19 +325,26 @@ class HARPix():
         return lon, lat
 
 def test():
-    h = HARPix()
-    #h.add_disc((0, 0), 30.0, 16, fill = 0)
-    #h += HARPix().add_disc((0, 0), 20.0, 512, fill = 1)
-    #h += HARPix().add_disc((0, 0), 20.0, 512)
-    #h.mask(lambda l, b: abs(b) < 20)
-    lonlat = (40, 10)
-    h.add_peak(lonlat, .001, 10)
-    h.add_func(lambda dist: 1/(dist+0.0000), mode = 'dist', center = lonlat)
-    #h.data = np.random.random(len(h.data))
+    npix = hp.nside2npix(8)
+    m = np.random.random((npix, 2,3))
+    h=HARPix.from_healpix(m)
+    m = h.get_heaplpix(128, idxs = (1,1))
     h.print_info()
-    m = h.get_heaplpix(1024)
-    print h.get_integral()
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
+    plt.savefig('test.eps')
+
+    h = HARPix(dims=(10,)).add_iso(fill = 100)
+    for i in range(10):
+        lonlat = (40*i, 10*i)
+        h0 = HARPix(dims=(10,))
+        h0.add_peak(lonlat, .01, 10)
+        print np.shape(h0.data)
+        x = np.linspace(1, 10, 10)
+        h0.add_func(lambda dist: x/(dist+0.01), mode = 'dist', center = lonlat)
+        h += h0
+    m = h.get_heaplpix(128, idxs=(4,))
+    h.print_info()
+    hp.mollview(np.log10(m), nest = True, cmap='gnuplot', min = 1, max = 4)
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
