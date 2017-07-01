@@ -12,6 +12,7 @@ from copy import deepcopy
 # Hierarchical Adaptive Resolution Pixelization of the Sphere
 # A thin python wrapper around healpix
 
+
 class HARPix():
     def __init__(self, verbose = False, dims = ()):
         self.ipix = np.empty((0,), dtype=np.int64)
@@ -39,7 +40,7 @@ class HARPix():
         print "Maximum nside:    %i"%hp.order2nside(max(self.order))
         return self
 
-    def add_peak(self, vec, r0, r1, n = 100):
+    def add_singularity(self, vec, r0, r1, n = 100):
         sr0 = np.deg2rad(r0)**2*np.pi/n
         sr1 = np.deg2rad(r1)**2*np.pi/n
         order0 = int(np.log(4*np.pi/12/sr0)/np.log(4))+1
@@ -303,7 +304,7 @@ class HARPix():
         return values
 
     def apply_mask(self, mask_func, mode = 'lonlat'):
-        self.mul(mask_func, mode = mode)
+        self.mul_func(mask_func, mode = mode)
         self.remove_zeros()
         return self
 
@@ -311,6 +312,10 @@ class HARPix():
         lonV, latV = self.get_lonlat()
         dist = hp.rotator.angdist([lon, lat], [lonV, latV], lonlat=True)
         return dist
+
+    def add_random(self):
+        self.data += np.random.random(np.shape(self.data))
+        return self
 
     def get_lonlat(self):
         orders = np.unique(self.order)
@@ -325,6 +330,19 @@ class HARPix():
         return lon, lat
 
 def test():
+    h = HARPix()
+    h.add_singularity((0,0), 0.1, 100, n = 1000)#.add_random()
+    h.add_func(lambda d: 1/d, center = (0,0), mode='dist')
+    h.add_singularity((30,10), 0.1, 100, n = 1000)#.add_random()
+    h.add_func(lambda d: 1/d, center = (30,10), mode='dist')
+    h.apply_mask(lambda l, b: abs(b) < 3)
+    h.print_info()
+
+    m = h.get_heaplpix(256)
+    hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
+    plt.savefig('test.eps')
+    quit()
+
     npix = hp.nside2npix(8)
     m = np.random.random((npix, 2,3))
     h=HARPix.from_healpix(m)
