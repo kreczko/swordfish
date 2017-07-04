@@ -180,6 +180,8 @@ def Sigma_hpx(nside, sigma=0., scale=1.):
     npix = hp.nside2npix(nside)
     def hpxconvolve(x):
         if sigma != 0.:
+            if (scale*x).ndim != 1:
+                print ((scale*x).reshape((scale*x).shape[1],npix)).shape
             alm = hp.map2alm(x*scale)
             x = hp.alm2map(alm, nside, sigma = np.deg2rad(sigma), verbose=False)
             return x*scale

@@ -341,7 +341,7 @@ def test():
     m = h.get_heaplpix(256)
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
     plt.savefig('test.eps')
-    quit()
+    # quit()
 
     npix = hp.nside2npix(8)
     m = np.random.random((npix, 2,3))
@@ -349,7 +349,7 @@ def test():
     m = h.get_heaplpix(128, idxs = (1,1))
     h.print_info()
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
-    plt.savefig('test.eps')
+    plt.savefig('test2.eps')
 
     h = HARPix(dims=(10,)).add_iso(fill = 100)
     for i in range(10):
@@ -363,7 +363,7 @@ def test():
     m = h.get_heaplpix(128, idxs=(4,))
     h.print_info()
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot', min = 1, max = 4)
-    plt.savefig('test.eps')
+    plt.savefig('test3.eps')
 
 if __name__ == "__main__":
     test()
