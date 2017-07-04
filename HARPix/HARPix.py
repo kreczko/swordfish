@@ -333,17 +333,17 @@ def test():
 
     h.add_iso(nside = 4)
     h.add_singularity((0,0), 0.1, 100, n = 1000)#.add_random()
-    h.add_func(lambda d: 0.1/d, center = (0,0), mode='dist')
+    # h.add_func(lambda d: 0.1/d, center = (0,0), mode='dist')
     h.add_singularity((30,20), 0.1, 100, n = 1000)#.add_random()
-    h.add_func(lambda d: 0.1/d, center = (30,20), mode='dist')
-    h.add_random()
+    # h.add_func(lambda d: 0.1/d, center = (30,20), mode='dist')
+    # h.add_random()
     #h.apply_mask(lambda l, b: abs(b) < 3)
-    h.print_info()
+    # h.print_info()
 
     m = h.get_heaplpix(1024)
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
     plt.show()
-    plt.savefig('test.eps')
+    # plt.savefig('test.eps')
     quit()
 
     npix = hp.nside2npix(8)
