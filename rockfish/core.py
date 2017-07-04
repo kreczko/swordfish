@@ -126,28 +126,28 @@ class EffectiveCounts(object):
     def discoveryreach(self, alpha, i, psi = 1., gaussian = False):
         raise NotImplemented()
 
-class NestedSignalModel(object):
-    def __init__(self, model, pmodels, pshape):
-        self.model = model
-        self.pmodels = pmodels
-        self.pshape= pshape
-
-    def effectivefishermatrix(self, **kwargs):
-        I = self.model.effectivefishermatrix(**kwargs)
-        for j, pmodel in self.pmodels:
-            pI = pmodel.effectivefishermatrix(**kwargs)
-            I += pI
-        return I
-
-    def effectiveinfoflux(self, **kwargs):
-        F = self.model.effectiveinfoflux(**kwargs)
-        F = F.reshape((-1,)+self.pshape)
-        for j, pmodel in self.pmodels:
-            pF = pmodel.effectiveinfoflux(**kwargs)
-            pF = pF.reshape((self.pshape)+(-1,))
-            pF = pF.sum(axis=-1)
-            F[j] += pF
-        return F.flatten()
+#class NestedSignalModel(object):
+#    def __init__(self, model, pmodels, pshape):
+#        self.model = model
+#        self.pmodels = pmodels
+#        self.pshape= pshape
+#
+#    def effectivefishermatrix(self, **kwargs):
+#        I = self.model.effectivefishermatrix(**kwargs)
+#        for j, pmodel in self.pmodels:
+#            pI = pmodel.effectivefishermatrix(**kwargs)
+#            I += pI
+#        return I
+#
+#    def effectiveinfoflux(self, **kwargs):
+#        F = self.model.effectiveinfoflux(**kwargs)
+#        F = F.reshape((-1,)+self.pshape)
+#        for j, pmodel in self.pmodels:
+#            pF = pmodel.effectiveinfoflux(**kwargs)
+#            pF = pF.reshape((self.pshape)+(-1,))
+#            pF = pF.sum(axis=-1)
+#            F[j] += pF
+#        return F.flatten()
 
 class Visualization(object):
     def __init__(self, xy, I11, I22, I12):
