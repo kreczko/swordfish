@@ -12,7 +12,6 @@ from copy import deepcopy
 # Hierarchical Adaptive Resolution Pixelization of the Sphere
 # A thin python wrapper around healpix
 
-
 class HARPix():
     def __init__(self, verbose = False, dims = ()):
         self.ipix = np.empty((0,), dtype=np.int64)
@@ -331,11 +330,14 @@ class HARPix():
 
 def test():
     h = HARPix()
+
+    h.add_iso(nside = 2)
     h.add_singularity((0,0), 0.1, 100, n = 1000)#.add_random()
-    h.add_func(lambda d: 1/d, center = (0,0), mode='dist')
-    h.add_singularity((30,10), 0.1, 100, n = 1000)#.add_random()
-    h.add_func(lambda d: 1/d, center = (30,10), mode='dist')
-    h.apply_mask(lambda l, b: abs(b) < 3)
+    h.add_func(lambda d: 0.1/d, center = (0,0), mode='dist')
+    h.add_singularity((30,20), 0.1, 100, n = 1000)#.add_random()
+    h.add_func(lambda d: 0.1/d, center = (30,20), mode='dist')
+    h.add_random()
+    #h.apply_mask(lambda l, b: abs(b) < 3)
     h.print_info()
 
     m = h.get_heaplpix(256)
