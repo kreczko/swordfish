@@ -22,13 +22,13 @@ class Model(object):
             self.systematics = la.LinearOperator(
                     (self.nbins, self.nbins), matvec = lambda x: x*0.)
 
-    def solveD(self, theta = None, psi = 1.):
+    def solveD(self, thetas = None, psi = 1.):
         # FIXME: Cache results
         noise = self.noise
         exposure = self.exposure*psi
-        if theta is not None: 
-            for i in range(max(self.ncomp, len(theta))):
-                noise += theta[i]*self.flux[i]
+        if thetas is not None: 
+            for i in range(max(self.ncomp, len(thetas))):
+                noise += thetas[i]*self.flux[i]
         D = (
                 la.aslinearoperator(sp.diags(self.noise/self.exposure))
                 + self.systematics
@@ -46,8 +46,8 @@ class Model(object):
             raise KeyError("Solver unknown.")
         return x, noise, exposure
 
-    def fishermatrix(self, theta = None, psi = 1.):
-        x, noise, exposure = self.solveD(theta=theta, psi=psi)
+    def fishermatrix(self, thetas = None, psi = 1.):
+        x, noise, exposure = self.solveD(thetas=thetas, psi=psi)
         I = np.zeros((self.ncomp,self.ncomp))
         for i in range(self.ncomp):
             for j in range(i+1):
@@ -56,8 +56,8 @@ class Model(object):
                 I[j,i] = tmp
         return I
 
-    def infoflux(self, theta = None, psi = 1.):
-        x, noise, exposure = self.solveD(theta=theta, psi=psi)
+    def infoflux(self, thetas = None, psi = 1.):
+        x, noise, exposure = self.solveD(thetas=thetas, psi=psi)
 
         F = np.zeros((self.ncomp,self.ncomp,self.nbins))
         for i in range(self.ncomp):
@@ -68,7 +68,7 @@ class Model(object):
         return F
 
     def effectivefishermatrix(self, i, **kwargs):
-        I = self.infomatrix(**kwargs)
+        I = self.fishermatrix(**kwargs)
         invI = np.linalg.linalg.inv(I)
         return 1./invI[i,i]
 
@@ -102,52 +102,37 @@ class EffectiveCounts(object):
 
     def effectivecounts(self, i, theta, psi = 1.):
         I0 = self.model.effectivefishermatrix(i, psi = psi)
-        thetas = zeros(I0.ncomp)
+        thetas = np.zeros(self.model.ncomp)
         thetas[i] = theta
         I = self.model.effectivefishermatrix(i, thetas = thetas, psi = psi)
-        s = 1/(1/I-1/I0)
-        b = 1/I/(1/I-1/I0)**2
+        s = 1/(1/I-1/I0)*theta**2
+        b = 1/I0/(1/I-1/I0)**2*theta**2
         return s, b
 
-    def upperlimit(self, alpha, i, psi = 1., gaussian = False):
-        Z = Z(alpha)
-        I0 = self.effectivefishermatrix(i, psi = psi)
+    def upperlimit(self, alpha, i, psi = 1., gaussian = True):
+        Z = 2.64  # FIXME
+        I0 = self.model.effectivefishermatrix(i, psi = psi)
         if gaussian:
-            return Z/sqrt(I0)
+            return Z/np.sqrt(I0)
         else:
-            thetas = zeros(I0.ncomp)
-            thetas[i] = theta
+            thetas = np.zeros(self.model.ncomp)
+            thetaUL_est = Z/np.sqrt(I0)  # Gaussian estimate
+            thetas[i] = thetaUL_est
             I = self.model.effectivefishermatrix(i, thetas = thetas, psi = psi)
-            if (I-I0)<0.01*I:
-                return Z/sqrt(I0)
+            if (I0-I)<0.01*I:
+                thetaUL = thetaUL_est
             else:
-                raise NotImplemented()
+                raise NotImplementedError()  # FIXME Finish implementation
+                theta_list = np.linspace(thetaUL_est/1000, thetaUL_est*1000, 1000)
+                z_list = []
+                for theta in theta_list:
+                    s, b = self.effectivecounts(i, theta = theta, psi = psi)
+                    z_list.append(s/np.sqrt(s+b))
+                thetaUL = np.interp(Z, z_list, theta_list)
+            return thetaUL
 
     def discoveryreach(self, alpha, i, psi = 1., gaussian = False):
         raise NotImplemented()
-
-#class NestedSignalModel(object):
-#    def __init__(self, model, pmodels, pshape):
-#        self.model = model
-#        self.pmodels = pmodels
-#        self.pshape= pshape
-#
-#    def effectivefishermatrix(self, **kwargs):
-#        I = self.model.effectivefishermatrix(**kwargs)
-#        for j, pmodel in self.pmodels:
-#            pI = pmodel.effectivefishermatrix(**kwargs)
-#            I += pI
-#        return I
-#
-#    def effectiveinfoflux(self, **kwargs):
-#        F = self.model.effectiveinfoflux(**kwargs)
-#        F = F.reshape((-1,)+self.pshape)
-#        for j, pmodel in self.pmodels:
-#            pF = pmodel.effectiveinfoflux(**kwargs)
-#            pF = pF.reshape((self.pshape)+(-1,))
-#            pF = pF.sum(axis=-1)
-#            F[j] += pF
-#        return F.flatten()
 
 class Visualization(object):
     def __init__(self, xy, I11, I22, I12):
@@ -189,3 +174,22 @@ def Sigma_hpx(nside, sigma=0., scale=1.):
         return la.LinearOperator((npix, npix), matvec = lambda x: flat(x))
     else:
         return la.LinearOperator((npix, npix), matvec = lambda x: hpxconvolve(x))
+
+def test():
+    flux = [np.ones(10), np.arange(10)+np.ones(10)*10]
+    noise = np.ones(10)
+    systematics = None
+    exposure = np.ones(10)*100.
+    m = Model(flux, noise, systematics, exposure)
+    I = m.fishermatrix()
+    F = m.infoflux()
+
+    print I
+    print m.effectivefishermatrix(0)
+
+    ec = EffectiveCounts(m)
+    print ec.effectivecounts(0, 3.00)
+    print ec.upperlimit(1, 0)
+
+if __name__ == "__main__":
+    test()
