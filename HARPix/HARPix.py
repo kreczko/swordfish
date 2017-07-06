@@ -48,7 +48,7 @@ class HARPix():
             r = r1/2**(o-order1)
             nside = hp.order2nside(o)
             self.add_disc(vec, r, nside, clean = False)
-        self._clean()
+        self.clean()
         return self
 
     def add_ipix(self, ipix, order, clean = True, fill = 0., insert = False):
@@ -63,7 +63,7 @@ class HARPix():
             self.data = np.append(self.data,
                     np.ones((len(ipix),)+self.dims)*fill, axis=0)
         if clean:
-            self._clean()
+            self.clean()
         return self
 
     def add_iso(self, nside = 1, clean = True, fill = 0.):
@@ -76,7 +76,7 @@ class HARPix():
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
         if self.verbose: print "add_disc:", len(ipix)
         if clean:
-            self._clean()
+            self.clean()
         return self
 
 
@@ -92,7 +92,7 @@ class HARPix():
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
         if self.verbose: print "add_disc:", len(ipix)
         if clean:
-            self._clean()
+            self.clean()
         return self
 
     def add_polygon(self, vertices, nside, clean = True, fill = 0.):
@@ -104,7 +104,7 @@ class HARPix():
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
         if self.verbose: print "add_polygon:", len(ipix)
         if clean:
-            self._clean()
+            self.clean()
         return self
 
     def get_trans_matrix(self, nside):
@@ -147,7 +147,7 @@ class HARPix():
         M = M.tocsr()
         return M
 
-    def get_healpix(self, nside, idxs = ()):
+    def get_heaplpix(self, nside, idxs = ()):
         M = self.get_trans_matrix(nside)
         if idxs == ():
             return M.dot(self.data)
@@ -160,7 +160,7 @@ class HARPix():
         else:
             raise NotImplementedError()
 
-    def _clean(self):
+    def clean(self):
         if self.verbose: print "clean"
         orders = np.unique(self.order)
         clean_ipix = []
@@ -215,7 +215,7 @@ class HARPix():
         self.data = np.append(self.data, other.data, axis=0)
         self.ipix = np.append(self.ipix, other.ipix)
         self.order = np.append(self.order, other.order)
-        self._clean()
+        self.clean()
         return self
 
     def __mul__(self, other):
@@ -331,41 +331,25 @@ class HARPix():
 def test():
     h = HARPix()
 
-    h.add_iso(nside = 1)
-    h.add_singularity((0,0.0), 0.1, 100, n = 100)#.add_random()
-    h.add_func(lambda d: 0.1/d, center = (0,0.0), mode='dist')
-    h.add_singularity((80,20), 0.1, 100, n = 100)#.add_random()
-    #h.add_singularity((30,20), 0.1, 100, n = 1000)#.add_random()
-    #h.add_func(lambda d: 0.1/d, center = (30,20), mode='dist')
-    #h.add_random()
-    #h.apply_mask(lambda l, b: abs(b) < 3)
-    h.print_info()
-
-    m = h.get_healpix(32)
-    hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
-    #hp.cartview(np.log10(m), nest = True, cmap='gnuplot', lonra = [-1, 1],
-          #  latra = [-1, 1])
-    print h.get_integral()
     h.add_iso(nside = 4)
     h.add_singularity((0,0), 0.1, 100, n = 1000)#.add_random()
-    h.add_func(lambda d: 0.1/d, center = (0,0), mode='dist')
+    # h.add_func(lambda d: 0.1/d, center = (0,0), mode='dist')
     h.add_singularity((30,20), 0.1, 100, n = 1000)#.add_random()
-    h.add_func(lambda d: 0.1/d, center = (30,20), mode='dist')
-    h.add_random()
+    # h.add_func(lambda d: 0.1/d, center = (30,20), mode='dist')
+    # h.add_random()
     #h.apply_mask(lambda l, b: abs(b) < 3)
-    h.print_info()
+    # h.print_info()
 
-    m = h.get_healpix(1024)
+    m = h.get_heaplpix(1024)
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
     plt.show()
-    plt.savefig('test.eps')
-    quit()
+    # plt.savefig('test.eps')
     quit()
 
     npix = hp.nside2npix(8)
     m = np.random.random((npix, 2,3))
     h=HARPix.from_healpix(m)
-    m = h.get_healpix(128, idxs = (1,1))
+    m = h.get_heaplpix(128, idxs = (1,1))
     h.print_info()
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
     plt.savefig('test2.eps')
@@ -379,11 +363,8 @@ def test():
         x = np.linspace(1, 10, 10)
         h0.add_func(lambda dist: x/(dist+0.01), mode = 'dist', center = lonlat)
         h += h0
-    m = h.get_healpix(128, idxs=(4,))
+    m = h.get_heaplpix(128, idxs=(4,))
     h.print_info()
-    #hp.mollview(np.log10(m), nest = True, cmap='gnuplot', min = 1, max = 4)
-    hp.cartview(np.log10(m), cmap='gnuplot', min = 1, max = 4)
-    plt.savefig('test.eps')
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot', min = 1, max = 4)
     plt.savefig('test3.eps')
 

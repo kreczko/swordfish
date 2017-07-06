@@ -165,7 +165,10 @@ def Sigma_hpx(nside, sigma=0., scale=1.):
     npix = hp.nside2npix(nside)
     def hpxconvolve(x):
         if sigma != 0.:
-            alm = hp.map2alm(x*scale)
+            X = scale*x
+            if (scale*x).ndim != 1:
+                X = (scale*x).reshape((scale*x).shape[1],npix)
+            alm = hp.map2alm(X)
             x = hp.alm2map(alm, nside, sigma = np.deg2rad(sigma), verbose=False)
             return x*scale
     def flat(x):
