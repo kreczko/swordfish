@@ -12,13 +12,108 @@ from copy import deepcopy
 # Hierarchical Adaptive Resolution Pixelization of the Sphere
 # A thin python wrapper around healpix
 
+def zeros_like(h):
+    H = deepcopy(h)
+    H.data *= 0.
+    return H
+
+def get_trans_matrix(IN, OUT):
+    if isinstance(IN, HARPix) and isinstance(OUT, HARPix):
+        return _get_trans_matrix_HARP2HARP(IN, OUT)
+    elif isinstance(IN, HARPix) and isinstance(OUT, int):
+        return _get_trans_matrix_HARP2HPX(IN, OUT)
+    elif isinstance(IN, int) and isinstance(OUT, HARPix):
+        return _get_trans_matrix_HPX2HARP(IN, OUT)
+    else:
+        raise TypeError("Invalid types.")
+
+def _get_trans_matrix_HARP2HPX(Hin, nside):
+    npix = hp.nside2npix(nside)
+    fullorder = hp.nside2order(nside)
+    fullmap = np.zeros(npix)
+    N = len(Hin.data)
+
+    # COO matrix setup
+    row =  []
+    col =  []
+    data = []
+    shape = (npix, N)
+    num = np.arange(N)
+
+    for o in np.unique(Hin.order):
+        mask = Hin.order == o
+        if o > fullorder:
+            idx = Hin.ipix[mask] >> (o-fullorder)*2
+            dat = np.ones(len(idx)) / 4**(o-fullorder)
+            row.extend(idx)
+            col.extend(num[mask])
+            data.extend(dat)
+        elif o == fullorder:
+            idx = Hin.ipix[mask]
+            dat = np.ones(len(idx))
+            row.extend(idx)
+            col.extend(num[mask])
+            data.extend(dat)
+        elif o < fullorder:
+            idx = Hin.ipix[mask] << -(o-fullorder)*2
+            dat = np.ones(len(idx))
+            for i in range(0, 4**(fullorder-o)):
+                row.extend(idx+i)
+                col.extend(num[mask])
+                data.extend(dat)
+
+    M = sp.coo_matrix((data, (row, col)), shape = shape)
+    M = M.tocsr()
+    return M
+
+def _get_trans_matrix_HPX2HARP(nside, Hout):
+    Hin = HARPix()
+    Hin.add_iso(nside)
+    T = get_trans_matrix(Hin, Hout)
+    return T
+
+def _get_trans_matrix_HARP2HARP(Hin, Hout):
+    orders1 = np.unique(Hout.order)
+    orders2 = np.unique(Hin.order)
+    N1 = len(Hout.data)
+    N2 = len(Hin.data)
+    num1 = np.arange(N1)
+    num2 = np.arange(N2)
+    A = sp.coo_matrix((N1,N2))
+    for o1 in orders1:
+        for o2 in orders2:
+            #print o1, o2
+            order = min(o1, o2)
+            npix = 12*(2**order)**2
+
+            mask1 = Hout.order == o1
+            idx1 = Hout.ipix[mask1] >> (o1-order)*2
+            dat1 = np.ones(len(idx1))
+            row1 = num1[mask1]
+            col1 = idx1
+            M1 = sp.coo_matrix((dat1, (row1, col1)), shape=(N1,npix))
+
+
+            mask2 = Hin.order == o2
+            idx2 = Hin.ipix[mask2] >> (o2-order)*2
+            dat2 = np.ones(len(idx2)) / 4**(o2-order)
+            row2 = idx2
+            col2 = num2[mask2]
+            M2 = sp.coo_matrix((dat2, (row2, col2)), shape=(npix,N2))
+
+            M1 = M1.tocsr()
+            M2 = M2.tocsc()
+            A += M1.dot(M2)
+
+    return A.tocsr()
+
+
 class HARPix():
-    def __init__(self, verbose = False, dims = ()):
+    def __init__(self, dims = ()):
         self.ipix = np.empty((0,), dtype=np.int64)
         self.order = np.empty((0,), dtype=np.int8)
         self.dims = dims
         self.data = np.empty((0,)+self.dims, dtype=np.float64)
-        self.verbose = verbose
 
     @classmethod
     def from_healpix(cls, m):
@@ -51,8 +146,8 @@ class HARPix():
         self._clean()
         return self
 
-    def add_ipix(self, ipix, order, clean = True, fill = 0., insert = False):
-        if insert:
+    def add_ipix(self, ipix, order, clean = True, fill = 0., insert_first = False):
+        if insert_first:
             self.ipix = np.append(ipix, self.ipix)
             self.order = np.append(order, self.order)
             self.data = np.append(np.ones((len(ipix),)+self.dims)*fill,
@@ -74,11 +169,9 @@ class HARPix():
         self.data = np.append(self.data,
                 np.ones((len(ipix),)+self.dims)*fill, axis=0)
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
-        if self.verbose: print "add_disc:", len(ipix)
         if clean:
             self._clean()
         return self
-
 
     def add_disc(self, vec, radius, nside, clean = True, fill = 0.):
         if len(vec) == 2:
@@ -90,7 +183,6 @@ class HARPix():
         self.data = np.append(self.data,
                 np.ones((len(ipix),)+self.dims)*fill, axis=0)
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
-        if self.verbose: print "add_disc:", len(ipix)
         if clean:
             self._clean()
         return self
@@ -102,53 +194,12 @@ class HARPix():
         self.data = np.append(self.data,
                 np.ones((len(ipix),)+self.dims)*fill, axis=0)
         self.order = np.append(self.order, order*np.ones(len(ipix), dtype=np.int8))
-        if self.verbose: print "add_polygon:", len(ipix)
         if clean:
             self._clean()
         return self
 
-    def get_trans_matrix(self, nside):
-        if self.verbose: print "full"
-        npix = hp.nside2npix(nside)
-        fullorder = hp.nside2order(nside)
-        fullmap = np.zeros(npix)
-        N = len(self.data)
-
-        # COO matrix setup
-        row =  []
-        col =  []
-        data = []
-        shape = (npix, N)
-        num = np.arange(N)
-
-        for o in np.unique(self.order):
-            mask = self.order == o
-            if o > fullorder:
-                idx = self.ipix[mask] >> (o-fullorder)*2
-                dat = np.ones(len(idx)) / 4**(o-fullorder)
-                row.extend(idx)
-                col.extend(num[mask])
-                data.extend(dat)
-            elif o == fullorder:
-                idx = self.ipix[mask]
-                dat = np.ones(len(idx))
-                row.extend(idx)
-                col.extend(num[mask])
-                data.extend(dat)
-            elif o < fullorder:
-                idx = self.ipix[mask] << -(o-fullorder)*2
-                dat = np.ones(len(idx))
-                for i in range(0, 4**(fullorder-o)):
-                    row.extend(idx+i)
-                    col.extend(num[mask])
-                    data.extend(dat)
-
-        M = sp.coo_matrix((data, (row, col)), shape = shape)
-        M = M.tocsr()
-        return M
-
     def get_healpix(self, nside, idxs = ()):
-        M = self.get_trans_matrix(nside)
+        M = get_trans_matrix(self, nside)
         if idxs == ():
             return M.dot(self.data)
         elif len(idxs) == 1:
@@ -161,7 +212,6 @@ class HARPix():
             raise NotImplementedError()
 
     def _clean(self):
-        if self.verbose: print "clean"
         orders = np.unique(self.order)
         clean_ipix = []
         clean_data = []
@@ -212,17 +262,15 @@ class HARPix():
         return self
 
     def __iadd__(self, other):
-        self.data = np.append(self.data, other.data, axis=0)
-        self.ipix = np.append(self.ipix, other.ipix)
-        self.order = np.append(self.order, other.order)
-        self._clean()
+        T = get_trans_matrix(other, self)
+        self.data += T.dot(other.data)
         return self
 
     def __mul__(self, other):
         if isinstance(other, HARPix):
             h1 = deepcopy(self)
             h2 = deepcopy(other)
-            h1.add_ipix(other.ipix, other.order, insert=True)
+            h1.add_ipix(other.ipix, other.order, insert_first=True)
             h2.add_ipix(self.ipix, self.order)
             h1.data *= h2.data
             return h1
@@ -231,11 +279,13 @@ class HARPix():
 
     def __add__(self, other):
         """Add to dense map."""
-        if self.verbose: print "add"
         if isinstance(other, HARPix):
-            h = deepcopy(self)
-            h += other
-            return h
+            this = deepcopy(self)
+            this.data = np.append(this.data, other.data, axis=0)
+            this.ipix = np.append(this.ipix, other.ipix)
+            this.order = np.append(this.order, other.order)
+            this._clean()
+            return this
         else:
             raise NotImplementedError
 
@@ -329,7 +379,40 @@ class HARPix():
         return lon, lat
 
 def test():
-    h = HARPix()
+    h1 = HARPix()
+    h2 = HARPix()
+
+    h1.add_singularity((0,0), 0.1, 20, n = 1000)#.add_random()
+    h1.add_singularity((0,-10), 0.1, 20, n = 1000)#.add_random()
+    h1.add_singularity((0,10), 0.1, 20, n = 1000)#.add_random()
+    h1.add_func(lambda d: 0.1/d, center = (0,10.0), mode='dist')
+    h1.add_func(lambda d: 0.1/d, center = (0,0.0), mode='dist')
+    h1.add_func(lambda d: 0.1/d, center = (0,-10.0), mode='dist')
+
+#    print h1.get_integral()
+#    T1 = get_trans_matrix(h1, 64)
+#    T2 = get_trans_matrix(64, h1)
+#    print h1.get_integral()
+
+#    h1.data = T2.dot(T1.dot(h1.data))
+
+    m = h1.get_healpix(256)
+    hp.mollview(np.log10(m), nest =True)
+    plt.savefig('test.eps')
+    quit()
+    #h2.add_random()
+    T = get_trans_matrix(h1, h2)
+    h2.data += T.dot(h1.data)
+    print h2.get_integral()
+    m = h2.get_healpix(256)
+    hp.mollview(np.log10(m), nest =True)
+    plt.savefig('test.eps')
+    quit()
+
+    quit()
+    plt.show()
+
+    quit()
 
     h.add_iso(nside = 1)
     h.add_singularity((0,0.0), 0.1, 100, n = 100)#.add_random()
@@ -355,10 +438,9 @@ def test():
     #h.apply_mask(lambda l, b: abs(b) < 3)
     h.print_info()
 
-    m = h.get_healpix(1024)
+    m = h.get_healpix(32)
+    m = hp.smoothing(m, sigma =1, nest=True)
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
-    plt.show()
-    plt.savefig('test.eps')
     quit()
     quit()
 
