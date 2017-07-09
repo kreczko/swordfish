@@ -17,17 +17,35 @@ def zeros_like(h):
     H.data *= 0.
     return H
 
-def get_trans_matrix(IN, OUT):
+def trans_data(T, data):
+    # FIXME: Rewrite just as matrix products
+    dims = np.shape(data)[1:]
+    Nout, Nin = T.shape
+    out = np.zeros((Nout,)+dims)
+    if len(dims) == 0:
+        out = T.dot(data)
+    elif len(dims) == 1:
+        for i in range(dims[0]):
+            out[:,i] = T.dot(data[:,i])
+    elif len(dims) == 2:
+        for i in range(dims[0]):
+            for j in range(dims[1]):
+                out[:,i,j] = T.dot(data[:,i,j])
+    else:
+        raise NotImplementedError()
+    return out
+
+def get_trans_matrix(IN, OUT, nested = True):
     if isinstance(IN, HARPix) and isinstance(OUT, HARPix):
         return _get_trans_matrix_HARP2HARP(IN, OUT)
     elif isinstance(IN, HARPix) and isinstance(OUT, int):
-        return _get_trans_matrix_HARP2HPX(IN, OUT)
+        return _get_trans_matrix_HARP2HPX(IN, OUT, nested = nested)
     elif isinstance(IN, int) and isinstance(OUT, HARPix):
-        return _get_trans_matrix_HPX2HARP(IN, OUT)
+        return _get_trans_matrix_HPX2HARP(IN, OUT, nested = nested)
     else:
         raise TypeError("Invalid types.")
 
-def _get_trans_matrix_HARP2HPX(Hin, nside):
+def _get_trans_matrix_HARP2HPX(Hin, nside, nested = True):
     npix = hp.nside2npix(nside)
     fullorder = hp.nside2order(nside)
     fullmap = np.zeros(npix)
@@ -45,11 +63,13 @@ def _get_trans_matrix_HARP2HPX(Hin, nside):
         if o > fullorder:
             idx = Hin.ipix[mask] >> (o-fullorder)*2
             dat = np.ones(len(idx)) / 4**(o-fullorder)
+            if not nested: idx = hp.nest2ring(nside, idx)
             row.extend(idx)
             col.extend(num[mask])
             data.extend(dat)
         elif o == fullorder:
             idx = Hin.ipix[mask]
+            if not nested: idx = hp.nest2ring(nside, idx)
             dat = np.ones(len(idx))
             row.extend(idx)
             col.extend(num[mask])
@@ -58,7 +78,10 @@ def _get_trans_matrix_HARP2HPX(Hin, nside):
             idx = Hin.ipix[mask] << -(o-fullorder)*2
             dat = np.ones(len(idx))
             for i in range(0, 4**(fullorder-o)):
-                row.extend(idx+i)
+                if not nested:
+                    row.extend(hp.nest2ring(nside, idx+i))
+                else:
+                    row.extend(idx+i)
                 col.extend(num[mask])
                 data.extend(dat)
 
@@ -66,9 +89,11 @@ def _get_trans_matrix_HARP2HPX(Hin, nside):
     M = M.tocsr()
     return M
 
-def _get_trans_matrix_HPX2HARP(nside, Hout):
+def _get_trans_matrix_HPX2HARP(nside, Hout, nested = True):
     Hin = HARPix()
     Hin.add_iso(nside)
+    if not nested:
+        Hin.ipix = hp.ring2nest(nside, Hin.ipix)
     T = get_trans_matrix(Hin, Hout)
     return T
 
@@ -127,6 +152,17 @@ class HARPix():
         r.ipix = np.arange(npix, dtype=np.int64)
         r.order = np.ones(npix, dtype=np.int8)*order
         return r
+
+    def set_data(self, data):
+        assert np.prod(np.shape(self.data)) == np.prod(np.shape(data))
+        self.data = data.reshape((-1,)+self.dims)
+        return self
+
+    @classmethod
+    def from_data(cls, h, data):
+        H = deepcopy(h)
+        H.set_data(data)
+        return H
 
     def print_info(self):
         print "Number of pixels: %i"%len(self.data)
@@ -198,16 +234,22 @@ class HARPix():
             self._clean()
         return self
 
+    def get_formatted_like(self, h):
+        T = get_trans_matrix(self, h)
+        H = deepcopy(h)
+        H.data = trans_data(T, self.data)
+        return H
+
     def get_healpix(self, nside, idxs = ()):
-        M = get_trans_matrix(self, nside)
+        T = get_trans_matrix(self, nside)
         if idxs == ():
-            return M.dot(self.data)
+            return T.dot(self.data)
         elif len(idxs) == 1:
-            return M.dot(self.data[:,idxs[0]])
+            return T.dot(self.data[:,idxs[0]])
         elif len(idxs) == 2:
-            return M.dot(self.data[:,idxs[0], idxs[1]])
+            return T.dot(self.data[:,idxs[0], idxs[1]])
         elif len(idxs) == 3:
-            return M.dot(self.data[:,idxs[0], idxs[1], idxs[2]])
+            return T.dot(self.data[:,idxs[0], idxs[1], idxs[2]])
         else:
             raise NotImplementedError()
 
@@ -263,7 +305,7 @@ class HARPix():
 
     def __iadd__(self, other):
         T = get_trans_matrix(other, self)
-        self.data += T.dot(other.data)
+        self.data += trans_data(T, other.data)
         return self
 
     def __mul__(self, other):
@@ -304,14 +346,17 @@ class HARPix():
     def get_integral(self):
         """Return area covered by map in steradian."""
         sr = 4*np.pi/12*4.**-self.order
-        return sum(sr*self.data)
+        M = (self.data.T*sr).T
+        return M.sum(axis=0)
 
     def mul_sr(self):
+        # FIXME: Does not work for non-trivial self.dims
         sr = 4*np.pi/12*4.**-self.order
         self.data *= sr
         return self
 
     def div_sr(self):
+        # FIXME: Does not work for non-trivial self.dims
         sr = 4*np.pi/12*4.**-self.order
         self.data /= sr
         return self
@@ -360,6 +405,7 @@ class HARPix():
     def get_dist(self, lon, lat):
         lonV, latV = self.get_lonlat()
         dist = hp.rotator.angdist([lon, lat], [lonV, latV], lonlat=True)
+        dist = np.rad2deg(dist)
         return dist
 
     def add_random(self):
@@ -379,17 +425,25 @@ class HARPix():
         return lon, lat
 
 def test():
-    h1 = HARPix()
-    h2 = HARPix()
+    dims = (10,3)
+    D = np.ones(dims)
+    h1 = HARPix(dims = dims).add_iso(32).add_random()
+    h2 = HARPix(dims = dims).add_iso(64).add_random()
 
-    h1.add_singularity((0,0), 0.1, 20, n = 1000)#.add_random()
-    h1.add_singularity((0,-10), 0.1, 20, n = 1000)#.add_random()
-    h1.add_singularity((0,10), 0.1, 20, n = 1000)#.add_random()
-    h1.add_func(lambda d: 0.1/d, center = (0,10.0), mode='dist')
-    h1.add_func(lambda d: 0.1/d, center = (0,0.0), mode='dist')
-    h1.add_func(lambda d: 0.1/d, center = (0,-10.0), mode='dist')
+    h1.add_singularity((0,0), 0.1, 20, n = 100)#.add_random()
+    h1.add_singularity((0,-10), 0.1, 20, n = 100)#.add_random()
+    h2.add_singularity((0,10), 0.1, 20, n = 100)#.add_random()
+    h1.add_func(lambda d: D*0.1/d, center = (0,10.0), mode='dist')
+    h1.add_func(lambda d: D*0.1/d, center = (0,0.0), mode='dist')
+    h2.add_func(lambda d: D*0.1/d, center = (0,-10.0), mode='dist')
 
-#    print h1.get_integral()
+    h1 += h2
+    quit()
+
+    T = get_trans_matrix(h1, h2)
+    h2.data = trans_data(T, h1.data)
+
+    #print h2.get_integral()
 #    T1 = get_trans_matrix(h1, 64)
 #    T2 = get_trans_matrix(64, h1)
 #    print h1.get_integral()
@@ -407,10 +461,6 @@ def test():
     m = h2.get_healpix(256)
     hp.mollview(np.log10(m), nest =True)
     plt.savefig('test.eps')
-    quit()
-
-    quit()
-    plt.show()
 
     quit()
 
