@@ -35,17 +35,19 @@ def trans_data(T, data):
         raise NotImplementedError()
     return out
 
-def get_trans_matrix(IN, OUT, nest = True):
+def get_trans_matrix(IN, OUT, nest = True, counts = False):
     if isinstance(IN, HARPix) and isinstance(OUT, HARPix):
+        if counts: raise NotImplementedError()
         return _get_trans_matrix_HARP2HARP(IN, OUT)
     elif isinstance(IN, HARPix) and isinstance(OUT, int):
-        return _get_trans_matrix_HARP2HPX(IN, OUT, nest = nest)
+        return _get_trans_matrix_HARP2HPX(IN, OUT, nest = nest, counts = counts)
     elif isinstance(IN, int) and isinstance(OUT, HARPix):
+        if counts: raise NotImplementedError()
         return _get_trans_matrix_HPX2HARP(IN, OUT, nest = nest)
     else:
         raise TypeError("Invalid types.")
 
-def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True):
+def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True, counts = False):
     npix = hp.nside2npix(nside)
     fullorder = hp.nside2order(nside)
     fullmap = np.zeros(npix)
@@ -62,7 +64,10 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True):
         mask = Hin.order == o
         if o > fullorder:
             idx = Hin.ipix[mask] >> (o-fullorder)*2
-            dat = np.ones(len(idx)) / 4**(o-fullorder)
+            if not counts:
+                dat = np.ones(len(idx)) / 4**(o-fullorder)
+            else:
+                dat = np.ones(len(idx))
             if not nest: idx = hp.nest2ring(nside, idx)
             row.extend(idx)
             col.extend(num[mask])
@@ -76,7 +81,10 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True):
             data.extend(dat)
         elif o < fullorder:
             idx = Hin.ipix[mask] << -(o-fullorder)*2
-            dat = np.ones(len(idx))
+            if not counts:
+                dat = np.ones(len(idx))
+            else:
+                dat = np.ones(len(idx)) / 4**(o-fullorder)
             for i in range(0, 4**(fullorder-o)):
                 if not nest:
                     row.extend(hp.nest2ring(nside, idx+i))
