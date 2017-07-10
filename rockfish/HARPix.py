@@ -35,17 +35,17 @@ def trans_data(T, data):
         raise NotImplementedError()
     return out
 
-def get_trans_matrix(IN, OUT, nested = True):
+def get_trans_matrix(IN, OUT, nest = True):
     if isinstance(IN, HARPix) and isinstance(OUT, HARPix):
         return _get_trans_matrix_HARP2HARP(IN, OUT)
     elif isinstance(IN, HARPix) and isinstance(OUT, int):
-        return _get_trans_matrix_HARP2HPX(IN, OUT, nested = nested)
+        return _get_trans_matrix_HARP2HPX(IN, OUT, nest = nest)
     elif isinstance(IN, int) and isinstance(OUT, HARPix):
-        return _get_trans_matrix_HPX2HARP(IN, OUT, nested = nested)
+        return _get_trans_matrix_HPX2HARP(IN, OUT, nest = nest)
     else:
         raise TypeError("Invalid types.")
 
-def _get_trans_matrix_HARP2HPX(Hin, nside, nested = True):
+def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True):
     npix = hp.nside2npix(nside)
     fullorder = hp.nside2order(nside)
     fullmap = np.zeros(npix)
@@ -63,13 +63,13 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nested = True):
         if o > fullorder:
             idx = Hin.ipix[mask] >> (o-fullorder)*2
             dat = np.ones(len(idx)) / 4**(o-fullorder)
-            if not nested: idx = hp.nest2ring(nside, idx)
+            if not nest: idx = hp.nest2ring(nside, idx)
             row.extend(idx)
             col.extend(num[mask])
             data.extend(dat)
         elif o == fullorder:
             idx = Hin.ipix[mask]
-            if not nested: idx = hp.nest2ring(nside, idx)
+            if not nest: idx = hp.nest2ring(nside, idx)
             dat = np.ones(len(idx))
             row.extend(idx)
             col.extend(num[mask])
@@ -78,7 +78,7 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nested = True):
             idx = Hin.ipix[mask] << -(o-fullorder)*2
             dat = np.ones(len(idx))
             for i in range(0, 4**(fullorder-o)):
-                if not nested:
+                if not nest:
                     row.extend(hp.nest2ring(nside, idx+i))
                 else:
                     row.extend(idx+i)
@@ -89,10 +89,10 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nested = True):
     M = M.tocsr()
     return M
 
-def _get_trans_matrix_HPX2HARP(nside, Hout, nested = True):
+def _get_trans_matrix_HPX2HARP(nside, Hout, nest = True):
     Hin = HARPix()
     Hin.add_iso(nside)
-    if not nested:
+    if not nest:
         Hin.ipix = hp.ring2nest(nside, Hin.ipix)
     T = get_trans_matrix(Hin, Hout)
     return T
@@ -240,8 +240,8 @@ class HARPix():
         H.data = trans_data(T, self.data)
         return H
 
-    def get_healpix(self, nside, idxs = ()):
-        T = get_trans_matrix(self, nside)
+    def get_healpix(self, nside, idxs = (), nest = True):
+        T = get_trans_matrix(self, nside, nest = nest)
         if idxs == ():
             return T.dot(self.data)
         elif len(idxs) == 1:
@@ -350,15 +350,13 @@ class HARPix():
         return M.sum(axis=0)
 
     def mul_sr(self):
-        # FIXME: Does not work for non-trivial self.dims
         sr = 4*np.pi/12*4.**-self.order
-        self.data *= sr
+        self.data = (self.data.T*sr).T
         return self
 
     def div_sr(self):
-        # FIXME: Does not work for non-trivial self.dims
         sr = 4*np.pi/12*4.**-self.order
-        self.data /= sr
+        self.data = (self.data.T/sr).T
         return self
 
     def mul_func(self, func, mode = 'lonlat', **kwargs):

@@ -215,8 +215,8 @@ class HARPix_Sigma(la.LinearOperator):
             G += H/max(M)
         G /= len(sigmas)
         self.Glist.append(G)
-        T1 = harp.get_trans_matrix(self.harpix, nside, nested = False)
-        T2 = harp.get_trans_matrix(nside, self.harpix, nested = False)
+        T1 = harp.get_trans_matrix(self.harpix, nside, nest = False)
+        T2 = harp.get_trans_matrix(nside, self.harpix, nest = False)
         self.Tlist.append([T1, T2])
         self.nsidelist.append(nside)
 
@@ -280,6 +280,89 @@ def Sigma_hpx(nside, sigma=0., scale=1.):
     else:
         return la.LinearOperator((npix, npix), matvec = lambda x: hpxconvolve(x))
 
+def get_sigma(x, f):
+    X, Y = np.meshgrid(x,x)
+    Sigma = f(X,Y)
+    A = 1/np.sqrt(np.diag(Sigma))
+    Sigma = np.diag(A).dot(Sigma).dot(np.diag(A))
+    return Sigma
+
+def test_3d():
+    from HARPix import HARPix
+    import healpy as hp
+    import pylab as plt
+
+    def plot_harp(h, filename, dims = ()):
+        m = h.get_healpix(128, idxs= dims)
+        hp.mollview(m, nest=True)
+        plt.savefig(filename)
+
+    def plot_rock(h, filename):
+        nside = 32
+        N = h.dims[0]
+        npix = hp.nside2npix(nside)
+        rings = hp._pixelfunc.pix2ring(nside, np.arange(npix), nest = True)
+        T = harp.get_trans_matrix(h, nside)
+        data = harp.trans_data(T, h.data)
+        out = []
+        for r in range(1, 4*nside):
+            mask = rings == r
+            out.append(data[mask].sum(axis=0))
+        out = np.array(out)
+        plt.imshow(out, aspect=0.8*N/(4*nside))
+        plt.xlabel("Energy [AU]")
+        plt.ylabel("Latitude [AU]")
+        plt.savefig(filename)
+
+    x = np.linspace(0, 10, 20)
+    nside = 16
+
+    dims = (len(x),)
+
+    # Signal definition
+    spec_sig = np.exp(-(x-5)**2/2)
+    sig = HARPix(dims = dims).add_iso(nside).add_singularity( (50,50), 1, 20, n = 10)
+    sig.add_func(lambda d: spec_sig*np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
+    sig.add_func(lambda d: spec_sig/(d+1)**1, mode = 'dist', center=(50,50))
+    #plot_harp(sig, 'sig.eps')
+    sig.mul_sr()
+    #sig.print_info()
+
+    # Background definition
+    bg = harp.zeros_like(sig)
+    spec_bg = x*0. + 1.
+    bg.add_func(lambda l, b: spec_bg*(0./(b**2+1.)**0.5+0.1))
+    #plot_harp(bg, 'bg.eps')
+    bg.mul_sr()
+    #bg.print_info()
+
+    # Covariance matrix definition
+    cov = HARPix_Sigma(sig)
+    var = bg*bg
+    var.data *= 0.01  # 10% uncertainty
+    #Sigma = np.diag(spec_bg).dot(np.eye(5).dot(np.diag(spec_bg)))
+    corr = lambda x, y: np.exp(-(x-y)**2/2/3**2)
+    Sigma = get_sigma(x, corr)
+    #Sigma = np.array([spec_bg]).T.dot(np.array([spec_bg]))
+    cov.add_systematics(variance = var, sigmas = [20.,], Sigma = Sigma, nside = 16)
+
+    # Set up rockfish
+    fluxes = [sig.data.flatten()]
+    noise = bg.data.flatten()
+    systematics = cov
+    exposure = np.ones_like(noise)*10000.0
+    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+
+#    I = m.fishermatrix()
+#    F = m.infoflux()
+#    I = m.effectivefishermatrix(0)
+    F = m.effectiveinfoflux(0)
+    f = harp.HARPix.from_data(sig, F)
+    f.div_sr()
+    plot_harp(f, 'test.eps', dims = (11,))
+    #plot_rock(f, 'test.eps')
+    quit()
+
 def test_simple():
     from HARPix import HARPix
     import healpy as hp
@@ -323,7 +406,7 @@ def test_simple():
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
-    exposure = np.ones_like(noise)*1000
+    exposure = np.ones_like(noise)*100
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
 #    I = m.fishermatrix()
@@ -415,5 +498,6 @@ def test_spectra():
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
+    #test_3d()
     test_simple()
     #test_spectra()
