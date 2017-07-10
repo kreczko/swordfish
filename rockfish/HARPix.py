@@ -80,11 +80,11 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True, counts = False):
             col.extend(num[mask])
             data.extend(dat)
         elif o < fullorder:
-            idx = Hin.ipix[mask] << -(o-fullorder)*2
+            idx = Hin.ipix[mask] << (fullorder-o)*2
             if not counts:
                 dat = np.ones(len(idx))
             else:
-                dat = np.ones(len(idx)) / 4**(o-fullorder)
+                dat = np.ones(len(idx)) / 4**(fullorder-o)
             for i in range(0, 4**(fullorder-o)):
                 if not nest:
                     row.extend(hp.nest2ring(nside, idx+i))

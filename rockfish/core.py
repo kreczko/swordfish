@@ -43,7 +43,7 @@ class Model(object):
                 x[i] = np.dot(invD, self.flux[i])
         elif self.solver == "cg":
             def callback(x):
-                pass
+                print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
                 x[i] = la.cg(D, self.flux[i], callback = callback, tol = 1e-5)[0]
         else:
@@ -330,14 +330,14 @@ def test_simple():
         plt.savefig(filename)
 
     dims = ()
-    nside = 8
+    nside = 16
 
     # Signal definition
     spec = 1.
     sig = HARPix(dims = dims).add_iso(nside).add_singularity( (50,50), .1, 20, n = 100)
     sig.add_func(lambda d: np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
-    #sig.add_func(lambda d: 1/(d+1)**1, mode = 'dist', center=(50,50))
-    sig.data += 1.0  # EGBG
+    sig.add_func(lambda d: 1/(d+1)**1, mode = 'dist', center=(50,50))
+    sig.data += 0.1  # EGBG
     plot_harp(sig, 'sig.eps')
     sig.mul_sr()
     #sig.print_info()
@@ -352,34 +352,12 @@ def test_simple():
     # Covariance matrix definition
 
     cov = HARPix_Sigma(sig)
-    #var1 = bg*bg
-    var2 = bg*bg
-    #var1.data *= 0.01  # 10% uncertainty
-    var2.data *= 0.  # 10% uncertainty
-    var2.data += 0.01  # 10% uncertainty
-    #cov.add_systematics(variance = var1, sigmas = [40.,], Sigma = None, nside = nside)
-    cov.add_systematics(variance = var2, sigmas = [3.,], Sigma = None, nside = 64)
-
-    x = sig.data*0
-    x[0] = 1
-    y = cov.dot(x)
-    sig.data = y
-    z = sig.get_healpix(128)
-    hp.mollview(z, nest = True)
-    plt.savefig('test.eps')
-    quit()
-
-    quit()
-
-#    # Test covariance
-#    x = np.zeros(hp.nside2npix(nside))
-#    x[1000] = 1
-#    x[1001] = 1
-#    x[1002] = 1
-#    y = cov.dot(x)
-#    hp.mollview(y, nest = True)
-#    plt.savefig('test.eps')
-#    quit()
+    var = bg*bg
+    var.data *= 0.  # 10% uncertainty
+    var.data += 0.01  # 10% uncertainty
+    var.mul_sr()
+    var.mul_sr()
+    cov.add_systematics(variance = var, sigmas = [20.,], Sigma = None, nside = 64)
 
     # Set up rockfish
     fluxes = [sig.data.flatten()]
