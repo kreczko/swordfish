@@ -190,8 +190,8 @@ class HARPix_Sigma(la.LinearOperator):
             H = hp.smoothalm(np.ones(Nalm), sigma = np.deg2rad(sigma), inplace = False, verbose = False)
             npix = hp.nside2npix(nside)
             m = np.zeros(npix)
-            m[0] = 1
-            M = hp.smoothing(m, sigma = np.deg2rad(sigma), lmax = lmax)
+            m[10] = 1
+            M = hp.alm2map(hp.map2alm(m)*H, nside)
             G += H/max(M)
         G /= len(sigmas)
         self.Glist.append(G)
@@ -330,11 +330,11 @@ def test_simple():
         plt.savefig(filename)
 
     dims = ()
-    nside = 16
+    nside = 8
 
     # Signal definition
     spec = 1.
-    sig = HARPix(dims = dims).add_iso(nside)#.add_singularity( (50,50), .1, 20, n = 100)
+    sig = HARPix(dims = dims).add_iso(nside).add_singularity( (50,50), .1, 20, n = 100)
     sig.add_func(lambda d: np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
     #sig.add_func(lambda d: 1/(d+1)**1, mode = 'dist', center=(50,50))
     sig.data += 1.0  # EGBG
@@ -358,7 +358,28 @@ def test_simple():
     var2.data *= 0.  # 10% uncertainty
     var2.data += 0.01  # 10% uncertainty
     #cov.add_systematics(variance = var1, sigmas = [40.,], Sigma = None, nside = nside)
-    cov.add_systematics(variance = var2, sigmas = [30.,], Sigma = None, nside = nside)
+    cov.add_systematics(variance = var2, sigmas = [3.,], Sigma = None, nside = 64)
+
+    x = sig.data*0
+    x[0] = 1
+    y = cov.dot(x)
+    sig.data = y
+    z = sig.get_healpix(128)
+    hp.mollview(z, nest = True)
+    plt.savefig('test.eps')
+    quit()
+
+    quit()
+
+#    # Test covariance
+#    x = np.zeros(hp.nside2npix(nside))
+#    x[1000] = 1
+#    x[1001] = 1
+#    x[1002] = 1
+#    y = cov.dot(x)
+#    hp.mollview(y, nest = True)
+#    plt.savefig('test.eps')
+#    quit()
 
     # Set up rockfish
     fluxes = [sig.data.flatten()]
@@ -455,7 +476,62 @@ def test_spectra():
     plt.legend()
     plt.savefig('test.eps')
 
+def smoothtest():
+    nside = 64
+    sigma = 30
+
+    lmax = 3*nside - 1  # default from hp.smoothing
+    lmax += 10
+    Nalm = hp.Alm.getsize(lmax)
+    H = hp.smoothalm(np.ones(Nalm), sigma = np.deg2rad(sigma), inplace = False)
+    npix = hp.nside2npix(nside)
+    m = np.zeros(npix)
+    m[1000] = 1
+    M = hp.alm2map(hp.map2alm(m, lmax = lmax)*H, nside, lmax = lmax)
+    G = H/max(M)
+    m *= 0
+    m[0] = 1
+    I = hp.alm2map(hp.map2alm(m, lmax = lmax)*G, nside, lmax = lmax)
+    print max(I)
+    hp.mollview(I)
+    plt.savefig('test.eps')
+
+def test_covariance():
+    from HARPix import HARPix
+    import healpy as hp
+    import pylab as plt
+
+    nside = 8
+
+    # Signal definition
+    spec = 1.
+    sig = HARPix().add_iso(nside).add_singularity( (50,50), .1, 50, n = 100)
+    sig.add_func(lambda d: np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
+    sig.mul_sr()
+
+    # Covariance matrix definition
+    cov = HARPix_Sigma(sig)
+    var = sig*sig
+    var.data *= 0.
+    var.data += 1.0
+    #var.mul_sr()
+    cov.add_systematics(variance = var,
+            sigmas = [20.,], Sigma = None, nside = nside)
+
+    x = sig.data*0
+    x[901] = 0.25
+    x[902] = 0.25
+    x[903] = 0.25
+    x[904] = 0.25
+    y = cov.dot(x)
+    sig.data = y
+    z = sig.get_healpix(128)
+    hp.mollview(z, nest = True)
+    plt.savefig('test.eps')
+
 if __name__ == "__main__":
     #test_3d()
+    #test_covariance()
     test_simple()
+    #smoothtest()
     #test_spectra()
