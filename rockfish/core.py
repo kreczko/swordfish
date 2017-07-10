@@ -191,12 +191,16 @@ class HARPix_Sigma(la.LinearOperator):
             npix = hp.nside2npix(nside)
             m = np.zeros(npix)
             m[0] = 1
-            M = hp.smoothing(m, sigma = np.deg2rad(sigma))
+            M = hp.smoothing(m, sigma = np.deg2rad(sigma), lmax = lmax)
             G += H/max(M)
         G /= len(sigmas)
         self.Glist.append(G)
-        T1 = harp.get_trans_matrix(self.harpix, nside, nest = False)
-        T2 = harp.get_trans_matrix(nside, self.harpix, nest = False)
+        T1 = harp.get_trans_matrix(self.harpix, nside, nest = False, counts = True)
+        T2 = T1.T
+        #T2 = harp.get_trans_matrix(self.harpix, nside, nest = False, counts = True).T
+        #print T2.dot(T1).todense()
+        #quit()
+        #T2 = harp.get_trans_matrix(nside, self.harpix, nest = False, counts = False)
         self.Tlist.append([T1, T2])
         self.nsidelist.append(nside)
 
@@ -218,17 +222,17 @@ class HARPix_Sigma(la.LinearOperator):
                     alm *= G
                     b[:,i] = hp.alm2map(alm, nside, verbose = False)
             else:
-                alm = hp.map2alm(a)
+                alm = hp.map2alm(a) # , iter = 0)
                 alm *= G
                 b = hp.alm2map(alm, nside, verbose = False)
             c = harp.trans_data(Ts[1], b)
 
             d = c.reshape((-1,)+self.harpix.dims)*F
 
-            #y = Ts[1].dot(Ts[0]).dot(y)
-            #hp.mollview(d, nest=True)
+            #hp.mollview(d/F/F, nest=True)
             #plt.savefig('test.eps')
             #quit()
+
             result += d.flatten()
         return result
 
@@ -330,9 +334,9 @@ def test_simple():
 
     # Signal definition
     spec = 1.
-    sig = HARPix(dims = dims).add_iso(nside).add_singularity( (50,50), .1, 20, n = 100)
+    sig = HARPix(dims = dims).add_iso(nside)#.add_singularity( (50,50), .1, 20, n = 100)
     sig.add_func(lambda d: np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
-    sig.add_func(lambda d: 1/(d+1)**1, mode = 'dist', center=(50,50))
+    #sig.add_func(lambda d: 1/(d+1)**1, mode = 'dist', center=(50,50))
     sig.data += 1.0  # EGBG
     plot_harp(sig, 'sig.eps')
     sig.mul_sr()
@@ -354,13 +358,13 @@ def test_simple():
     var2.data *= 0.  # 10% uncertainty
     var2.data += 0.01  # 10% uncertainty
     #cov.add_systematics(variance = var1, sigmas = [40.,], Sigma = None, nside = nside)
-    cov.add_systematics(variance = var2, sigmas = [30.,], Sigma = None, nside = 8)
+    cov.add_systematics(variance = var2, sigmas = [30.,], Sigma = None, nside = nside)
 
     # Set up rockfish
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
-    exposure = np.ones_like(noise)*100
+    exposure = np.ones_like(noise)*0.1
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
 #    I = m.fishermatrix()
