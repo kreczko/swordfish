@@ -35,17 +35,19 @@ def trans_data(T, data):
         raise NotImplementedError()
     return out
 
-def get_trans_matrix(IN, OUT, nest = True):
+def get_trans_matrix(IN, OUT, nest = True, counts = False):
     if isinstance(IN, HARPix) and isinstance(OUT, HARPix):
+        if counts: raise NotImplementedError()
         return _get_trans_matrix_HARP2HARP(IN, OUT)
     elif isinstance(IN, HARPix) and isinstance(OUT, int):
-        return _get_trans_matrix_HARP2HPX(IN, OUT, nest = nest)
+        return _get_trans_matrix_HARP2HPX(IN, OUT, nest = nest, counts = counts)
     elif isinstance(IN, int) and isinstance(OUT, HARPix):
+        if counts: raise NotImplementedError()
         return _get_trans_matrix_HPX2HARP(IN, OUT, nest = nest)
     else:
         raise TypeError("Invalid types.")
 
-def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True):
+def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True, counts = False):
     npix = hp.nside2npix(nside)
     fullorder = hp.nside2order(nside)
     fullmap = np.zeros(npix)
@@ -62,7 +64,10 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True):
         mask = Hin.order == o
         if o > fullorder:
             idx = Hin.ipix[mask] >> (o-fullorder)*2
-            dat = np.ones(len(idx)) / 4**(o-fullorder)
+            if not counts:
+                dat = np.ones(len(idx)) / 4**(o-fullorder)
+            else:
+                dat = np.ones(len(idx))
             if not nest: idx = hp.nest2ring(nside, idx)
             row.extend(idx)
             col.extend(num[mask])
@@ -75,8 +80,11 @@ def _get_trans_matrix_HARP2HPX(Hin, nside, nest = True):
             col.extend(num[mask])
             data.extend(dat)
         elif o < fullorder:
-            idx = Hin.ipix[mask] << -(o-fullorder)*2
-            dat = np.ones(len(idx))
+            idx = Hin.ipix[mask] << (fullorder-o)*2
+            if not counts:
+                dat = np.ones(len(idx))
+            else:
+                dat = np.ones(len(idx)) / 4**(fullorder-o)
             for i in range(0, 4**(fullorder-o)):
                 if not nest:
                     row.extend(hp.nest2ring(nside, idx+i))
@@ -163,6 +171,13 @@ class HARPix():
         H = deepcopy(h)
         H.set_data(data)
         return H
+
+    def get_data(self, mul_sr = False):
+        if not mul_sr:
+            return deepcopy(self.data)
+        else:
+            sr = 4*np.pi/12*4.**-self.order
+            return (self.data.T*sr).T
 
     def print_info(self):
         print "Number of pixels: %i"%len(self.data)
@@ -316,6 +331,10 @@ class HARPix():
             h2.add_ipix(self.ipix, self.order)
             h1.data *= h2.data
             return h1
+        elif isinstance(other, float):
+            this = deepcopy(self)
+            this.data *= other
+            return this
         else:
             raise NotImplementedError
 
