@@ -44,8 +44,7 @@ class Model(object):
                 x[i] = np.dot(invD, self.flux[i])
         elif self.solver == "cg":
             def callback(x):
-                pass
-                #print len(x), sum(x), np.mean(x)
+                print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
                 x[i] = la.cg(D, self.flux[i], x0 = self.cache, callback = callback, tol = 1e-5)[0]
                 self.cache= x[i]
@@ -330,39 +329,43 @@ def test_3d():
     #plot_rock(f, 'test.eps')
     quit()
 
+def get_model_input(signals, noise, systematics, exposure):
+    S = [sig.get_formatted_like(signals[0]).get_data(mul_sr=True).flatten() for sig in signals]
+    N = noise.get_formatted_like(signals[0]).get_data(mul_sr=True).flatten()
+    SYS = HARPix_Sigma(signals[0])
+    if systematics is None:
+        SYS = None
+    else:
+        for sys in systematics:
+            SYS.add_systematics(**sys)
+    if isinstance(exposure, float):
+        E = np.ones_like(N)*exposure
+    else:
+        E = exposure.get_formatted_like(sig[0]).get_data().flatten()
+    return S, N, SYS, E
+
 def test_UL():
     from HARPix import HARPix
     import healpy as hp
     import pylab as plt
 
-    dims = ()
-    nside = 16
-
     # Signal definition
-    spec = 1.
-    sig = HARPix(dims = dims).add_iso(nside)#.add_singularity( (50,50), .1, 20, n = 100)
+    sig = HARPix().add_iso(16)
     sig.add_func(lambda d: np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
-    #sig.add_func(lambda d: 1/(d+1)**1, mode = 'dist', center=(50,50))
-    #sig.data += 0.1  # EGBG
 
     # Background definition
     bg = harp.zeros_like(sig)
     bg.add_func(lambda l, b: 0./(b**2+1.)**0.5+1.0)
 
-    # Covariance matrix definition
-
-    cov = HARPix_Sigma(sig)
-    cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = None, nside = 64)
-
-    # Set up rockfish
-    fluxes = [sig.get_data(mul_sr=True).flatten()]
-    noise = bg.get_data(mul_sr=True).flatten()
-    systematics = cov
-    exposure = np.ones_like(noise)*100000.0
+    fluxes, noise, systematics, exposure = get_model_input(
+            [sig], bg, [dict(err=bg*0.1, sigmas = [20.,], Sigma = None, nside =
+                16)], 100000.0)
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
-    ec = EffectiveCounts(m)
+    I = m.fishermatrix()
+    print I
 
+    ec = EffectiveCounts(m)
     UL = ec.upperlimit(0.05, 0)
     ULg = ec.upperlimit(0.05, 0, gaussian = True)
 
