@@ -10,7 +10,7 @@ import HARPix as harp
 import pylab as plt
 from copy import deepcopy
 
-class Model(object):
+class Model(object):  # Everything is flux!
     def __init__(self, flux, noise, systematics, exposure, solver = 'direct'):
         self.flux = flux
         self.noise = noise
@@ -44,7 +44,8 @@ class Model(object):
                 x[i] = np.dot(invD, self.flux[i])
         elif self.solver == "cg":
             def callback(x):
-                print len(x), sum(x), np.mean(x)
+                pass
+                #print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
                 x[i] = la.cg(D, self.flux[i], x0 = self.cache, callback = callback, tol = 1e-5)[0]
                 self.cache= x[i]
@@ -205,22 +206,17 @@ class HARPix_Sigma(la.LinearOperator):
             G += H/max(M)
         G /= len(sigmas)
         self.Glist.append(G)
-        T1 = harp.get_trans_matrix(self.harpix, nside, nest = False, counts = True)
-        T2 = T1.T
-        #T2 = harp.get_trans_matrix(self.harpix, nside, nest = False, counts = True).T
-        #print T2.dot(T1).todense()
-        #quit()
-        #T2 = harp.get_trans_matrix(nside, self.harpix, nest = False, counts = False)
-        self.Tlist.append([T1, T2])
+        T = harp.get_trans_matrix(self.harpix, nside, nest = False, counts = True)
+        self.Tlist.append(T)
         self.nsidelist.append(nside)
 
         self.Slist.append(Sigma)
 
     def _matvec(self,x):
         result = np.zeros(self.N)
-        for nside, F, G, S, Ts in zip(self.nsidelist, self.Flist, self.Glist, self.Slist, self.Tlist):
+        for nside, F, G, S, T in zip(self.nsidelist, self.Flist, self.Glist, self.Slist, self.Tlist):
             y = x.reshape((-1,)+self.harpix.dims)*F
-            z = harp.trans_data(Ts[0], y)
+            z = harp.trans_data(T, y)
             if S is not None:
                 a = S.dot(z.T).T
             else:
@@ -232,17 +228,11 @@ class HARPix_Sigma(la.LinearOperator):
                     alm *= G
                     b[:,i] = hp.alm2map(alm, nside, verbose = False)
             else:
-                alm = hp.map2alm(a) # , iter = 0)
+                alm = hp.map2alm(a, iter = 0)  # Older but faster routine
                 alm *= G
                 b = hp.alm2map(alm, nside, verbose = False)
-            c = harp.trans_data(Ts[1], b)
-
+            c = harp.trans_data(T.T, b)
             d = c.reshape((-1,)+self.harpix.dims)*F
-
-            #hp.mollview(d/F/F, nest=True)
-            #plt.savefig('test.eps')
-            #quit()
-
             result += d.flatten()
         return result
 
@@ -290,46 +280,35 @@ def test_3d():
     sig = HARPix(dims = dims).add_iso(nside).add_singularity( (50,50), 1, 20, n = 10)
     sig.add_func(lambda d: spec_sig*np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
     sig.add_func(lambda d: spec_sig/(d+1)**1, mode = 'dist', center=(50,50))
-    #plot_harp(sig, 'sig.eps')
     sig.mul_sr()
-    #sig.print_info()
 
     # Background definition
     bg = harp.zeros_like(sig)
     spec_bg = x*0. + 1.
     bg.add_func(lambda l, b: spec_bg*(0./(b**2+1.)**0.5+0.1))
-    #plot_harp(bg, 'bg.eps')
     bg.mul_sr()
-    #bg.print_info()
 
     # Covariance matrix definition
     cov = HARPix_Sigma(sig)
-    var = bg*bg
-    var.data *= 0.01  # 10% uncertainty
-    #Sigma = np.diag(spec_bg).dot(np.eye(5).dot(np.diag(spec_bg)))
     corr = lambda x, y: np.exp(-(x-y)**2/2/3**2)
     Sigma = get_sigma(x, corr)
-    #Sigma = np.array([spec_bg]).T.dot(np.array([spec_bg]))
-    cov.add_systematics(variance = var, sigmas = [20.,], Sigma = Sigma, nside = 16)
+    cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = Sigma, nside = 16)
 
     # Set up rockfish
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
-    exposure = np.ones_like(noise)*10000.0
+    exposure = np.ones_like(noise)*100.0
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
-#    I = m.fishermatrix()
-#    F = m.infoflux()
-#    I = m.effectivefishermatrix(0)
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
     f.div_sr()
     plot_harp(f, 'test.eps', dims = (11,))
-    #plot_rock(f, 'test.eps')
-    quit()
+    plot_rock(f, 'test.eps')
 
 def get_model_input(signals, noise, systematics, exposure):
+    # Everything is intensity
     S = [sig.get_formatted_like(signals[0]).get_data(mul_sr=True).flatten() for sig in signals]
     N = noise.get_formatted_like(signals[0]).get_data(mul_sr=True).flatten()
     SYS = HARPix_Sigma(signals[0])
@@ -341,7 +320,7 @@ def get_model_input(signals, noise, systematics, exposure):
     if isinstance(exposure, float):
         E = np.ones_like(N)*exposure
     else:
-        E = exposure.get_formatted_like(sig[0]).get_data().flatten()
+        E = exposure.get_formatted_like(signals[0]).get_data().flatten()
     return S, N, SYS, E
 
 def test_UL():
@@ -359,7 +338,7 @@ def test_UL():
 
     fluxes, noise, systematics, exposure = get_model_input(
             [sig], bg, [dict(err=bg*0.1, sigmas = [20.,], Sigma = None, nside =
-                16)], 100000.0)
+                16)], bg*100.)
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
     I = m.fishermatrix()
@@ -368,10 +347,12 @@ def test_UL():
     ec = EffectiveCounts(m)
     UL = ec.upperlimit(0.05, 0)
     ULg = ec.upperlimit(0.05, 0, gaussian = True)
+    s, b = ec.effectivecounts(0, 1.0)
 
     print "Total signal counts (theta = 1):", ec.counts(0, 1.0)
-    print "Eff.  signal counts (theta = 1):", ec.effectivecounts(0, 1.0)[0]
-    print "Upper limit on theta:           ", UL
+    print "Eff.  signal counts (theta = 1):", s
+    print "Eff.  bkg counts (theta = 1)   :", b
+    print "Upper limit on theta           :", UL
     print "Upper limit on theta (gaussian):", ULg
 
 def test_simple():
@@ -395,11 +376,10 @@ def test_simple():
     sig.data += 0.1  # EGBG
     plot_harp(sig, 'sig.eps')
     sig.mul_sr()
-    #sig.print_info()
 
     # Background definition
     bg = harp.zeros_like(sig)
-    bg.add_func(lambda l, b: 0./(b**2+1.)**0.5+0.1)
+    bg.add_func(lambda l, b: 0./(b**2+1.)**0.5+1.0)
     plot_harp(bg, 'bg.eps')
     bg.mul_sr()
     #bg.print_info()
@@ -407,23 +387,15 @@ def test_simple():
     # Covariance matrix definition
 
     cov = HARPix_Sigma(sig)
-    var = bg*bg
-    var.data *= 0.  # 10% uncertainty
-    var.data += 0.01  # 10% uncertainty
-    var.mul_sr()
-    var.mul_sr()
-    cov.add_systematics(variance = var, sigmas = [20.,], Sigma = None, nside = 64)
+    cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = None, nside = 64)
 
     # Set up rockfish
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
-    exposure = np.ones_like(noise)*100.
+    exposure = np.ones_like(noise)*10000.
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
-#    I = m.fishermatrix()
-#    F = m.infoflux()
-#    I = m.effectivefishermatrix(0)
     F = m.effectiveinfoflux(0, thetas = [0.000], psi = 1.)
     f = harp.HARPix.from_data(sig, F)
     f.div_sr()
@@ -472,17 +444,9 @@ def test_MW_dSph():
     exposure = np.ones_like(noise)*1.
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
-#    I = m.fishermatrix()
-#    F = m.infoflux()
-#    I = m.effectivefishermatrix(0)
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
     plot_harp(f, 'test.eps')
-    quit()
-
-#    ec = EffectiveCounts(m)
-#    print ec.effectivecounts(0, 3.00)
-#    print ec.upperlimit(1, 0)
 
 def test_spectra():
     import pylab as plt
@@ -492,16 +456,12 @@ def test_spectra():
 
     fluxes = [(np.exp(-(x-5)**2/2/3**2)+np.exp(-(x-5)**2/2/0.2**2))*dx]
     noise = (1+x*0.0001)*dx
-    exposure = np.ones_like(noise)*10000.0
+    exposure = np.ones_like(noise)*1.
     X, Y = np.meshgrid(x,x)
-    systematics = 0.11*(
+    systematics = 0.1*(
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
-                #np.exp(-(X-Y)**2/2/10**2) + np.exp(-(X-Y)**2/2/5**2) +
-                #np.exp(-(X-Y)**2/2/2**2) + np.exp(-(X-Y)**2/2/1**2)
                 )).dot(np.diag(noise))
-    print systematics.dot(np.ones_like(x))
-    quit()
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
     f = m.effectiveinfoflux(0)
     plt.plot(np.sqrt(fluxes[0]**2/dx/noise))
@@ -537,27 +497,22 @@ def test_covariance():
     nside = 8
 
     # Signal definition
-    spec = 1.
     sig = HARPix().add_iso(nside).add_singularity( (50,50), .1, 50, n = 100)
     sig.add_func(lambda d: np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
     sig.mul_sr()
 
     # Covariance matrix definition
     cov = HARPix_Sigma(sig)
-    var = sig*sig
-    var.data *= 0.
-    var.data += 1.0
-    #var.mul_sr()
-    cov.add_systematics(variance = var,
+    bg = sig*.0
+    bg.data += 1
+    cov.add_systematics(err = bg*0.1,
             sigmas = [20.,], Sigma = None, nside = nside)
 
-    x = sig.data*0
-    x[901] = 0.25
-    x[902] = 0.25
-    x[903] = 0.25
-    x[904] = 0.25
+    x = np.zeros_like(sig.data)
+    x[901] = 1.
     y = cov.dot(x)
     sig.data = y
+    sig.div_sr()
     z = sig.get_healpix(128)
     hp.mollview(z, nest = True)
     plt.savefig('test.eps')
@@ -575,8 +530,6 @@ def test_matrix():
     systematics = 0.1*(
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
-                #np.exp(-(X-Y)**2/2/10**2) + np.exp(-(X-Y)**2/2/5**2) +
-                #np.exp(-(X-Y)**2/2/2**2) + np.exp(-(X-Y)**2/2/1**2)
                 )).dot(np.diag(noise))
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
     I = m.fishermatrix()
@@ -590,11 +543,12 @@ def test_matrix():
     plt.legend()
     plt.savefig('test.eps')
 
+
 if __name__ == "__main__":
     #test_3d()
     #test_covariance()
     #test_simple()
-    test_UL()
+    #test_UL()
     #smoothtest()
     #test_spectra()
-    #test_matrix()
+    test_matrix()
