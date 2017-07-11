@@ -416,7 +416,7 @@ def test_simple():
     f = harp.HARPix.from_data(sig, F)
     f.div_sr()
     plot_harp(f, 'test.eps')
-    quit()
+    # quit()
 
 def test_MW_dSph():
     from HARPix import HARPix
@@ -466,7 +466,7 @@ def test_MW_dSph():
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
     plot_harp(f, 'test.eps')
-    quit()
+    # quit()
 
 #    ec = EffectiveCounts(m)
 #    print ec.effectivecounts(0, 3.00)
@@ -489,7 +489,7 @@ def test_spectra():
                 #np.exp(-(X-Y)**2/2/2**2) + np.exp(-(X-Y)**2/2/1**2)
                 )).dot(np.diag(noise))
     print systematics.dot(np.ones_like(x))
-    quit()
+    # quit()
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
     f = m.effectiveinfoflux(0)
     plt.plot(np.sqrt(fluxes[0]**2/dx/noise))
@@ -498,6 +498,6 @@ def test_spectra():
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
-    #test_3d()
+    test_3d()
     test_simple()
-    #test_spectra()
+    test_spectra()
