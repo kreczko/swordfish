@@ -172,6 +172,13 @@ class HARPix():
         H.set_data(data)
         return H
 
+    def get_data(self, mul_sr = False):
+        if not mul_sr:
+            return deepcopy(self.data)
+        else:
+            sr = 4*np.pi/12*4.**-self.order
+            return (self.data.T*sr).T
+
     def print_info(self):
         print "Number of pixels: %i"%len(self.data)
         print "Minimum nside:    %i"%hp.order2nside(min(self.order))
@@ -324,6 +331,10 @@ class HARPix():
             h2.add_ipix(self.ipix, self.order)
             h1.data *= h2.data
             return h1
+        elif isinstance(other, float):
+            this = deepcopy(self)
+            this.data *= other
+            return this
         else:
             raise NotImplementedError
 

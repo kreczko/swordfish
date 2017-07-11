@@ -189,10 +189,9 @@ class HARPix_Sigma(la.LinearOperator):
         self.Tlist = []
         self.nsidelist = []
 
-    def add_systematics(self, variance = None, sigmas = None, Sigma = None,
+    def add_systematics(self, err = None, sigmas = None, Sigma = None,
             nside = None):
-        variance_data = variance.get_formatted_like(self.harpix).data
-        F = np.sqrt(variance_data)
+        F = err.get_formatted_like(self.harpix).get_data(mul_sr=True)
         self.Flist.append(F)
 
         lmax = 3*nside - 1  # default from hp.smoothing
@@ -345,28 +344,19 @@ def test_UL():
     sig.add_func(lambda d: np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
     #sig.add_func(lambda d: 1/(d+1)**1, mode = 'dist', center=(50,50))
     #sig.data += 0.1  # EGBG
-    sig.mul_sr()
-    #sig.print_info()
 
     # Background definition
     bg = harp.zeros_like(sig)
     bg.add_func(lambda l, b: 0./(b**2+1.)**0.5+1.0)
-    bg.mul_sr()
-    #bg.print_info()
 
     # Covariance matrix definition
 
     cov = HARPix_Sigma(sig)
-    var = bg*bg
-    var.data *= 0.  # 10% uncertainty
-    var.data += 0.01  # 10% uncertainty
-    var.mul_sr()
-    var.mul_sr()
-    cov.add_systematics(variance = var, sigmas = [20.,], Sigma = None, nside = 64)
+    cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = None, nside = 64)
 
     # Set up rockfish
-    fluxes = [sig.data.flatten()]
-    noise = bg.data.flatten()
+    fluxes = [sig.get_data(mul_sr=True).flatten()]
+    noise = bg.get_data(mul_sr=True).flatten()
     systematics = cov
     exposure = np.ones_like(noise)*100000.0
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
@@ -601,7 +591,7 @@ if __name__ == "__main__":
     #test_3d()
     #test_covariance()
     #test_simple()
-    #test_UL()
+    test_UL()
     #smoothtest()
     #test_spectra()
-    test_matrix()
+    #test_matrix()
