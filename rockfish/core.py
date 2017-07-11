@@ -131,15 +131,16 @@ class EffectiveCounts(object):
                 thetaUL = thetaUL_est
             else:
                 z_list = []
-                theta_list = [thetaUL_est/1]
+                theta_list = [thetaUL_est]
                 while True:
                     theta = theta_list[-1]
                     s, b = self.effectivecounts(i, theta = theta, psi = psi)
+                    if s == 0: b = 1.
                     z_list.append(s/np.sqrt(s+b))
                     if z_list[-1] > Z:
                         break
                     else:
-                        theta_list.append(theta*1.5)
+                        theta_list.append(theta*1.3)
                 thetaUL = np.interp(Z, z_list, theta_list)
             return thetaUL
 
