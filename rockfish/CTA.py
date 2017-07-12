@@ -8,10 +8,14 @@ import HARPix as harp
 import pylab as plt
 from core import *
 from tools import *
+from scipy.interpolate import interp1d
+from scipy.integrate import quad
+from math import cos, sin
+from PPPC4DMID import interp
 
 def CTA_UL():
     # Define energy range
-    E = np.logspace(1, 3, 11)  # 10 energy bins
+    E = np.logspace(0.5, 4.5, 11)  # 10 energy bins
     Ebins = np.array(zip(E[:-1], E[1:]))  # energy bins
     dE = Ebins[:,1]-Ebins[:,0]  # bin width
     Emed = Ebins.prod(axis=1)**0.5  # geometric mean enery
@@ -20,18 +24,112 @@ def CTA_UL():
     # Define base pixel size
     nside = 8
 
+    MW_D = 8.5 # kpc
+    MW_rs = 20 # kpc
+    alpha = 0.17
+    MW_rhoS = 0.081351425781930664 # GeV cm^-3
+    m_DM = 100 # GeV
+
+    def plot_harp(h, filename):
+        m = h.get_healpix(128)
+        hp.mollview(m, nest=True)
+        plt.savefig(filename)
+
+
+    def Lum_los(d, l, b):
+        """Returns density squared for given galactic coordinates l and b at 
+        distance d away from Suns location"""
+        l = np.deg2rad(l)
+        b = np.deg2rad(b)
+        if MW_D**2. + d**2. - (2*MW_D*d*cos(b)*cos(l)) < 0.0:
+            R = 1e-3
+        else:
+            R = np.sqrt(MW_D**2. + d**2. - (2*MW_D*d*cos(b)*cos(l)))
+        if R < 1e-3:
+            R = 1e-3
+        ratio = R/MW_rs
+        # Einasto profile in units of GeV cm^-3
+        rho_dm = MW_rhoS*np.exp(-(2/alpha)*((ratio)**alpha - 1))
+        # Returns signal for annihilating DM rho**2
+        return rho_dm**2.
+
+    l = np.logspace(-3,4,num=50)
+    los = np.zeros(len(l))
+    for i in range(len(l)):
+        los[i] = quad(Lum_los,0.,200.,args=(l[i],0.0))[0]
+
+    Interp_sig = interp1d(l,los)
     # Signal definition
-    spec_sig = 1e-5*np.exp(-(Emed-50)**2/2)*dE  # dN/dE integrated over energy bins (approx.)
-    sig = harp.HARPix(dims = dims).add_iso(nside)#.add_singularity((0,0), 1, 20, n = 10)
-    sig.add_func(lambda d: spec_sig*np.exp(-d**2/2/20**2), mode = 'dist', center=(0,0))
+    # DEFINE SIGNAL SPCTRUM HERE FROM PPPC4DMID
+    spec_DM = interp.Interp(ch='bb')
+    spec_sig = spec_DM(m_DM,Emed)*dE  # dN/dE integrated over energy bins (approx.)
+    # Can put in additional dimensions in harp.HARPix(dims=dims)
+    sig = harp.HARPix(dims=dims).add_singularity((0,0), 2, 10, n = 1000)
+    sig.add_func(lambda d: spec_sig*Interp_sig(d), mode = 'dist', center=(0,0))
+    # DM prefactors, we deive limit on <sigmav>
+    sig *= 8/np.pi/(m_DM**2.)
     # NOTE: sig.data should correpond to the signal intensity (for a fixed DM
     # mass and annihilation cross-section), in units of photons/cm2/s/sr,
     # integrated over the energy bin, but *not* integrated over the pixel size
 
+    # FIXME: Add in DM prefactors
+    
+    # hp.mollview(np.log10(sig.get_healpix(128)), nest=True)
+    # plt.show()
+    # plot_harp(f, 'CTA_test.eps')
+    # quit()
+
+    # Cosmic ray electrons
+    def CR_Elec_spec(E):
+        # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
+        E = E/1.e3
+        Norm = 1.17e-11
+        if E > 1.:
+            gamma = 3.9
+        else:
+            gamma = 3.0
+        return Norm*(E**(-gamma))
+
+    # Should be in photons/cm^2/s/sr when multiplied by dE (approx)
+    CR_Elec_bkg = (np.vectorize(CR_Elec_spec))(Emed)*dE
+
+   # Cosmic ray protons
+    def CR_Proton_spec(E):
+        # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
+        # Factor of 3 comes from Silverwood paper and approximately matches
+        # their plot
+        E = E*3./1e3
+        Norm = 8.73e-9
+        Gamma = 2.71
+        return Norm*(E**(-Gamma))
+
+    proton_eff = 1.e-2
+    # Should be in photons/cm^2/s/sr when multiplied by dE (approx)
+    CR_Proton_bkg = proton_eff*(np.vectorize(CR_Proton_spec))(Emed)*dE
+    
+    #### Might not be necessary
+    spec_bkg = CR_Proton_bkg + CR_Elec_bkg
+    ################
+
+    # NOTE: Check plot with Fig2: 1408.4131v2
+    # plt.loglog(Emed, Emed**2.*total_bkg, label="Total Background")
+    # plt.loglog(Emed, Emed**2.*CR_Proton_bkg, label="CR protons")
+    # plt.loglog(Emed, Emed**2.*CR_Elec_bkg, label="CR electrons")
+    # plt.xlim(10,1e4)
+    # plt.xlabel("Energy")
+    # plt.ylabel("Differential intensity")
+    # plt.legend()
+    # plt.show()
+    # quit()
     # Background definition
-    spec_bkg = 1e-3*Emed**-2.7*dE  # dN/dE integrated over energy bins (approx.)
+    # spec_bkg = CR_Elec_bkg + CR_Proton_bkg  # dN/dE integrated over energy bins (approx.)
+
     bkg = harp.zeros_like(sig)
     bkg.add_func(lambda l, b: spec_bkg)
+    # hp.mollview(np.log10(bkg.get_healpix(128)), nest=True)
+    # plt.show()
+    # quit()
+
     # NOTE: Same as for the signal.
 
     # Covariance matrix for energy spectrum uncertainty (ad hoc)
@@ -41,7 +139,14 @@ def CTA_UL():
     unc = 0.01  # 1% bkg uncertainty
     corr_length = 10  # 10 deg correlation length of bkg uncertainty
 
-    expo = 1e8  # Exposure in cm2 s  (Aeff * Tobs)
+    # Effective area taken from https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
+    # FIXME: Check conversion from picture is correct 50h???
+    Et, EffA = np.loadtxt("CTA_effective_A.txt", unpack=True)
+    EffectiveA_m2 = interp1d(Et,EffA, fill_value="extrapolate")(Emed)
+    EffectiveA_cm2 = EffectiveA_m2/(100**2.) # Conversion to cm^2
+    # EffectiveA_cm2 = EffectiveA_cm2/50./60./60. # Conversion to cm^2/s
+    obsT = 100.*60.*60. # 100 hours in s
+    expo = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
     # NOTE: expo can be HARPix object, and should be energy dependent in the
     # end
 
