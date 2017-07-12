@@ -28,25 +28,19 @@ def CTA_UL():
     MW_rs = 20 # kpc
     alpha = 0.17
     MW_rhoS = 0.081351425781930664 # GeV cm^-3
-    m_DM = 100 # GeV
-
-    def plot_harp(h, filename):
-        m = h.get_healpix(128)
-        hp.mollview(m, nest=True)
-        plt.savefig(filename)
-
+    m_DM = 1e3 # GeV
 
     def Lum_los(d, l, b):
         """Returns density squared for given galactic coordinates l and b at 
         distance d away from Suns location"""
         l = np.deg2rad(l)
         b = np.deg2rad(b)
-        if MW_D**2. + d**2. - (2*MW_D*d*cos(b)*cos(l)) < 0.0:
-            R = 1e-3
+        if (MW_D**2. + d**2. - (2*MW_D*d*cos(b)*cos(l))) < 0.0:
+            R = 1e-5
         else:
             R = np.sqrt(MW_D**2. + d**2. - (2*MW_D*d*cos(b)*cos(l)))
-        if R < 1e-3:
-            R = 1e-3
+        if R < 1e-5:
+            R = 1e-5
         ratio = R/MW_rs
         # Einasto profile in units of GeV cm^-3
         rho_dm = MW_rhoS*np.exp(-(2/alpha)*((ratio)**alpha - 1))
@@ -62,17 +56,16 @@ def CTA_UL():
     # Signal definition
     # DEFINE SIGNAL SPCTRUM HERE FROM PPPC4DMID
     spec_DM = interp.Interp(ch='bb')
-    spec_sig = spec_DM(m_DM,Emed)*dE  # dN/dE integrated over energy bins (approx.)
+    spec_sig = spec_DM(m_DM,Emed)*dE # dN/dE integrated over energy bins (approx.)
     # Can put in additional dimensions in harp.HARPix(dims=dims)
-    sig = harp.HARPix(dims=dims).add_singularity((0,0), 2, 10, n = 1000)
+    sig = harp.HARPix(dims=dims).add_singularity((0,0), 2, 15, n = 1000)
     sig.add_func(lambda d: spec_sig*Interp_sig(d), mode = 'dist', center=(0,0))
     # DM prefactors, we deive limit on <sigmav>
     sig *= 8/np.pi/(m_DM**2.)
+
     # NOTE: sig.data should correpond to the signal intensity (for a fixed DM
     # mass and annihilation cross-section), in units of photons/cm2/s/sr,
     # integrated over the energy bin, but *not* integrated over the pixel size
-
-    # FIXME: Add in DM prefactors
     
     # hp.mollview(np.log10(sig.get_healpix(128)), nest=True)
     # plt.show()
@@ -112,9 +105,13 @@ def CTA_UL():
     ################
 
     # NOTE: Check plot with Fig2: 1408.4131v2
-    # plt.loglog(Emed, Emed**2.*total_bkg, label="Total Background")
+    # FIXME: DM signal much too low
+    # Jval = sig.get_healpix(128).sum()
+    # Jval *= 
+    # plt.loglog(Emed, Emed**2.*spec_bkg, label="Total Background")
     # plt.loglog(Emed, Emed**2.*CR_Proton_bkg, label="CR protons")
     # plt.loglog(Emed, Emed**2.*CR_Elec_bkg, label="CR electrons")
+    # plt.loglog(Emed, Emed**2.*spec_sig*Jval, label="bb DM")
     # plt.xlim(10,1e4)
     # plt.xlabel("Energy")
     # plt.ylabel("Differential intensity")
@@ -133,25 +130,26 @@ def CTA_UL():
     # NOTE: Same as for the signal.
 
     # Covariance matrix for energy spectrum uncertainty (ad hoc)
-    Sigma = get_sigma(Emed, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
+    # Sigma = get_sigma(Emed, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
 
     # Set up rockfish
     unc = 0.01  # 1% bkg uncertainty
     corr_length = 10  # 10 deg correlation length of bkg uncertainty
 
     # Effective area taken from https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
-    # FIXME: Check conversion from picture is correct 50h???
     Et, EffA = np.loadtxt("CTA_effective_A.txt", unpack=True)
     EffectiveA_m2 = interp1d(Et,EffA, fill_value="extrapolate")(Emed)
-    EffectiveA_cm2 = EffectiveA_m2/(100**2.) # Conversion to cm^2
-    # EffectiveA_cm2 = EffectiveA_cm2/50./60./60. # Conversion to cm^2/s
-    obsT = 100.*60.*60. # 100 hours in s
+    EffectiveA_cm2 = EffectiveA_m2/(100**2.) # Conversion to cm^2/50hr
+    EffectiveA_cm2 = EffectiveA_cm2/50./60./60. # Conversion to cm^2/s
+    obsT = 100.*60.*60. # 100 hours of observation in s
     expo = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
+    # print expo.sum()
     # NOTE: expo can be HARPix object, and should be energy dependent in the
     # end
 
+    # FIXME: Currently does not take in exposure map as a function of energy so just sums instead
     fluxes, noise, systematics, exposure = get_model_input([sig], bkg,
-            [dict(err = bkg*unc, sigmas = [corr_length], Sigma = Sigma, nside = nside)], expo)
+            [dict(err = bkg*unc, sigmas = [corr_length], Sigma = None, nside = nside)], expo.sum())
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
 
     # Calculate upper limits with effective counts method
