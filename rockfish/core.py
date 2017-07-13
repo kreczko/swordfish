@@ -28,22 +28,25 @@ class Model(object):  # Everything is flux!
         if thetas is not None: 
             for i in range(max(self.ncomp, len(thetas))):
                 noise += thetas[i]*self.flux[i]
+        spexp = la.aslinearoperator(sp.diags(exposure))
         D = (
-                la.aslinearoperator(sp.diags(noise/exposure))
-                + self.systematics
+                la.aslinearoperator(sp.diags(noise*exposure))
+                + spexp*self.systematics*spexp
                 )
         x = np.zeros((self.ncomp, self.nbins))
         if self.solver == "direct":
             dense = D(np.eye(self.nbins))
             invD = np.linalg.linalg.inv(dense)
             for i in range(self.ncomp):
-                x[i] = np.dot(invD, self.flux[i])
+                x[i] = np.dot(invD, self.flux[i]*exposure)*exposure
         elif self.solver == "cg":
             def callback(x):
                 pass
                 #print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
-                x[i] = la.cg(D, self.flux[i], x0 = self.cache, callback = callback, tol = 1e-5)[0]
+                x0 = None if self.cache is None else self.cache/exposure
+                x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-5)[0]
+                x[i] *= exposure
                 self.cache= x[i]
         else:
             raise KeyError("Solver unknown.")
@@ -141,6 +144,7 @@ class EffectiveCounts(object):
                         break
                     else:
                         theta_list.append(theta*1.3)
+                    #print theta, z_list
                 thetaUL = np.interp(Z, z_list, theta_list)
             return thetaUL
 

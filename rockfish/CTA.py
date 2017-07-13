@@ -22,17 +22,19 @@ def CTA_UL():
     dims = (len(Emed),)  # HARPix dimensions per pixel
 
     # Define base pixel size
-    nside = 8
+    nside = 32
 
     MW_D = 8.5 # kpc
     MW_rs = 20 # kpc
     alpha = 0.17
     MW_rhoS = 0.081351425781930664 # GeV cm^-3
     m_DM = 1e3 # GeV
+    kpc_cm = 3.086e21 # conversion factor
 
     def Lum_los(d, l, b):
         """Returns density squared for given galactic coordinates l and b at 
         distance d away from Suns location"""
+        # FIXME: fucking units?
         l = np.deg2rad(l)
         b = np.deg2rad(b)
         if (MW_D**2. + d**2. - (2*MW_D*d*cos(b)*cos(l))) < 0.0:
@@ -47,33 +49,39 @@ def CTA_UL():
         # Returns signal for annihilating DM rho**2
         return rho_dm**2.
 
-    l = np.logspace(-3,4,num=50)
+    l = np.logspace(-3,np.log10(180),num=50)
     los = np.zeros(len(l))
     for i in range(len(l)):
-        los[i] = quad(Lum_los,0.,200.,args=(l[i],0.0))[0]
+        los[i] = quad(Lum_los,0.,100.,args=(l[i],0.0))[0]*kpc_cm
 
     Interp_sig = interp1d(l,los)
     # Signal definition
     # DEFINE SIGNAL SPCTRUM HERE FROM PPPC4DMID
     spec_DM = interp.Interp(ch='bb')
     spec_sig = spec_DM(m_DM,Emed)*dE # dN/dE integrated over energy bins (approx.)
+    #spec_sig = np.ones_like(spec_sig)  # FIXME
     # Can put in additional dimensions in harp.HARPix(dims=dims)
-    sig = harp.HARPix(dims=dims).add_singularity((0,0), 2, 15, n = 1000)
+    sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 10, n = 10)
     sig.add_func(lambda d: spec_sig*Interp_sig(d), mode = 'dist', center=(0,0))
     # DM prefactors, we deive limit on <sigmav>
-    sig *= 8/np.pi/(m_DM**2.)
+
+    sig *= 1e-26/8/np.pi/(m_DM**2.)
+
+    #m = sig.get_data(mul_sr =True)
+    #print m.sum(axis=0)
+    #quit()
 
     # NOTE: sig.data should correpond to the signal intensity (for a fixed DM
     # mass and annihilation cross-section), in units of photons/cm2/s/sr,
     # integrated over the energy bin, but *not* integrated over the pixel size
     
-    # hp.mollview(np.log10(sig.get_healpix(128)), nest=True)
-    # plt.show()
-    # plot_harp(f, 'CTA_test.eps')
+    # hp.mollview(np.log10(sig.get_healpix(128, idxs=(5,))), nest=True)
+    # plt.savefig('test.eps')
     # quit()
 
     # Cosmic ray electrons
     def CR_Elec_spec(E):
+        # FIXME: Wrong
         # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
         E = E/1.e3
         Norm = 1.17e-11
@@ -133,13 +141,13 @@ def CTA_UL():
     # Sigma = get_sigma(Emed, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
 
     # Set up rockfish
-    unc = 0.01  # 1% bkg uncertainty
-    corr_length = 10  # 10 deg correlation length of bkg uncertainty
+    unc = 0.00000001  # 1% bkg uncertainty
+    corr_length = 4  # 10 deg correlation length of bkg uncertainty
 
     # Effective area taken from https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
     Et, EffA = np.loadtxt("CTA_effective_A.txt", unpack=True)
     EffectiveA_m2 = interp1d(Et,EffA, fill_value="extrapolate")(Emed)
-    EffectiveA_cm2 = EffectiveA_m2/(100**2.) # Conversion to cm^2/50hr
+    EffectiveA_cm2 = EffectiveA_m2*(100**2.) # Conversion to cm^2/50hr
     EffectiveA_cm2 = EffectiveA_cm2/50./60./60. # Conversion to cm^2/s
     obsT = 100.*60.*60. # 100 hours of observation in s
     expo = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
@@ -147,21 +155,29 @@ def CTA_UL():
     # NOTE: expo can be HARPix object, and should be energy dependent in the
     # end
 
+#    print "Exposure:", expo
+#    m = sig.get_data(mul_sr = True); print "Int Sig:", m.sum(axis=0)
+#    m = bkg.get_data(mul_sr = True); print "Int Bkg:", m.sum(axis=0)
+#    quit()
+
     # FIXME: Currently does not take in exposure map as a function of energy so just sums instead
     fluxes, noise, systematics, exposure = get_model_input([sig], bkg,
             [dict(err = bkg*unc, sigmas = [corr_length], Sigma = None, nside = nside)], expo.sum())
+    systematics = None
     m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    #print m.fishermatrix()
+    #quit()
 
     # Calculate upper limits with effective counts method
     ec = EffectiveCounts(m)
-    UL = ec.upperlimit(0.05, 0)
     ULg = ec.upperlimit(0.05, 0, gaussian = True)
-    s, b = ec.effectivecounts(0, 1.)
+    #UL = ec.upperlimit(0.05, 0)
+    #s, b = ec.effectivecounts(0, 1.)
 
-    print "Total signal counts (theta = 1):", ec.counts(0, 1.0)
-    print "Eff.  signal counts (theta = 1):", s
-    print "Eff.  bkg counts (theta = 1)   :", b
-    print "Upper limit on theta           :", UL
+    #print "Total signal counts (theta = 1):", ec.counts(0, 1.0)
+    #print "Eff.  signal counts (theta = 1):", s
+    #print "Eff.  bkg counts (theta = 1)   :", b
+    #print "Upper limit on theta           :", UL
     print "Upper limit on theta (gaussian):", ULg
 
     # NOTE: Theta is here defined w.r.t. to the reference signal flux
