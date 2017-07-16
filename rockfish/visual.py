@@ -136,7 +136,8 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
     dmax_fun = lambda x, y: dmax_interp.ev(x, y)
     dmin_fun = lambda x, y: dmin_interp.ev(x, y)
 
-    samples = sample(d_fun, sample_mask = sample_mask, extent = [xmin, xmax, ymin, ymax], wmax = d.max(), N = 100000)
+    samples = sample(d_fun, sample_mask = sample_mask, extent = [xmin, xmax,
+        ymin, ymax], wmax = d.max(), N = 1000)
     tree = cKDTree(samples)
     #plt.scatter(samples[:,0], samples[:,1], marker='.', alpha='0.1')
     mask = np.ones(len(samples), dtype='bool')
@@ -154,7 +155,7 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
     mask = np.zeros(len(samples), dtype='bool')
 
     if ellipses or voronoi or streamlines:
-        for i in tqdm(range(len(mask))):
+        for i in tqdm(range(len(mask)), desc = 'Distance check'):
             indices = tree.query_ball_point(samples[i], dmax_fun(samples[i][0],
                 samples[i][1]))
             dist1 = distance(samples[i], samples[indices], g(samples[i]))
@@ -186,7 +187,7 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
 
     if streamlines:
         from matplotlib.collections import LineCollection
-        for p0 in tqdm(samples[mask]):
+        for p0 in tqdm(samples[mask], desc = 'Generate streamlines'):
             t = np.linspace(0, 0.5, 10)
             colors = ['b', 'b', 'b', 'b']
             for vfun, c in zip([v1_fun, v2_fun, v1r_fun, v2r_fun], colors):

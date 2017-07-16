@@ -62,7 +62,7 @@ class HARPix_Sigma(la.LinearOperator):
 
         def X0(x):
             if Sigma is not None:
-                x = S.dot(x.T).T
+                x = Sigma.dot(x.T).T
             return x
 
         self.Xlist.append([X0, X1])

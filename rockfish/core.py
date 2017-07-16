@@ -46,7 +46,7 @@ class Model(object):  # Everything is flux!
                 if self.verbose:
                     print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
-                x0 = None if self.cache is None else self.cache/exposure
+                x0 = self.flux[i]/noise if self.cache is None else self.cache/exposure
                 #print np.shape(D)
                 #D = D(np.eye(self.nbins))
                 x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-5)[0]
