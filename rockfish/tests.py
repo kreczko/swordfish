@@ -270,6 +270,19 @@ def test_matrix():
     plt.legend()
     plt.savefig('test.eps')
 
+def test_infoflux():
+    sig = harp.HARPix().add_singularity( (0,0), .1, 50, n = 100)
+    sig.data += 1.
+    bkg = sig
+
+    fluxes, noise, systematics, exposure = get_model_input([sig], bkg, None, 1.)
+    m = Model(fluxes, noise, systematics, exposure)
+    F = m.effectiveinfoflux(0)
+    f = harp.HARPix.from_data(sig, F, div_sr = True)
+    m = f.get_healpix(256)
+    hp.mollview(m, nest = True)
+    plt.savefig('test.eps')
+
 
 if __name__ == "__main__":
     #test_3d()
@@ -278,4 +291,5 @@ if __name__ == "__main__":
     #test_UL()
     #smoothtest()
     #test_spectra()
-    test_matrix()
+    #test_matrix()
+    test_infoflux()
