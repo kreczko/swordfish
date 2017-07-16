@@ -7,6 +7,7 @@ import numpy as np
 import HARPix as harp
 from scipy.sparse import linalg as la
 from core import *
+from scipy.integrate import quad
 
 class HARPix_Sigma(la.LinearOperator):
     """docstring for CovarianceMatrix"""
@@ -99,6 +100,45 @@ def get_model_input(signals, noise, systematics, exposure):
     else:
         E = exposure.get_formatted_like(signals[0]).get_data().flatten()
     return S, N, SYS, E
+
+class Logbins(object):
+   def __init__(self, start, stop, num):
+      """Return log-bin object.
+
+      Parameters
+      ----------
+      start : float
+          ``base ** start`` is the starting value of the sequence.
+      stop : float
+           ``base ** stop`` is the final value of the sequence, unless `endpoint`
+           is False.  In that case, ``num + 1`` values are spaced over the
+           interval in log-space, of which all but the last (a sequence of
+           length `num`) are returned.
+       num : integer
+           Number of samples to generate.
+
+       Returns
+       -------
+       out : Logbins
+
+       """
+
+      assert start < stop
+      self.start = start
+      self.stop = stop
+      self.num = num 
+
+      self.bounds = np.logspace(start, stop, num+1)
+      self.bins = np.array(zip(self.bounds[:-1], self.bounds[1:]))
+      self.widths= self.bins[:,1]-self.bins[:,0]
+      self.means = self.bins.prod(axis=1)**0.5
+
+   def integrate(self, function):
+       out = []
+       for xmin, xmax in self.bins:
+           o = quad(function, xmin, xmax)[0]
+           out.append(o)
+       return np.array(out)
 
 
 

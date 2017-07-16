@@ -7,11 +7,13 @@ import scipy.sparse.linalg as la
 import scipy.sparse as sp
 
 class Model(object):  # Everything is flux!
-    def __init__(self, flux, noise, systematics, exposure, solver = 'direct'):
+    def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
+            verbose = False):
         self.flux = flux
         self.noise = noise
         self.exposure = exposure
         self.cache = None
+        self.verbose = verbose
 
         self.solver = solver
         self.nbins = len(self.noise)  # Number of bins
@@ -41,7 +43,8 @@ class Model(object):  # Everything is flux!
                 x[i] = np.dot(invD, self.flux[i]*exposure)*exposure
         elif self.solver == "cg":
             def callback(x):
-                pass
+                if self.verbose:
+                    print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
                 x0 = None if self.cache is None else self.cache/exposure
                 #print np.shape(D)
