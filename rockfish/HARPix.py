@@ -430,16 +430,31 @@ class HARPix():
         return self
 
     def get_lonlat(self):
+        return self._get_position(lonlat = True)
+
+    def get_vec(self):
+        return self._get_position(lonlat = False)
+
+    def _get_position(self, lonlat = False):
         orders = np.unique(self.order)
-        lon = np.zeros(len(self.data))
-        lat = np.zeros(len(self.data))
+        if lonlat:
+            lon = np.zeros(len(self.data))
+            lat = np.zeros(len(self.data))
+        else:
+            vec = np.zeros((3, len(self.data)))
         for o in orders:
             nside = hp.order2nside(o)
             mask = self.order == o
             ipix = self.ipix[mask]
-            lon[mask], lat[mask] = hp.pix2ang(nside, ipix, nest = True, lonlat = True)
-        lon = np.mod(lon+180, 360) - 180
-        return lon, lat
+            if lonlat:
+                lon[mask], lat[mask] = hp.pix2ang(nside, ipix, nest = True, lonlat = True)
+            else:
+                vec[:,mask] = hp.pix2vec(nside, ipix, nest = True)
+        if lonlat:
+            lon = np.mod(lon+180, 360) - 180
+            return lon, lat
+        else:
+            return vec
 
 def test():
     dims = (10,3)

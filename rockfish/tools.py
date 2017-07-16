@@ -15,56 +15,66 @@ class HARPix_Sigma(la.LinearOperator):
         self.N = np.prod(np.shape(self.harpix.data))
         super(HARPix_Sigma, self).__init__(None, (self.N, self.N))
         self.Flist = []
-        self.Glist = []
-        self.Slist = []
-        self.Tlist = []
-        self.nsidelist = []
+        self.Xlist = []
 
-    def add_systematics(self, err = None, sigmas = None, Sigma = None,
+    def add_systematics(self, err = None, sigma = None, Sigma = None,
             nside = None):
         F = err.get_formatted_like(self.harpix).get_data(mul_sr=True)
         self.Flist.append(F)
 
-        lmax = 3*nside - 1  # default from hp.smoothing
-        Nalm = hp.Alm.getsize(lmax)
-        G = np.zeros(Nalm, dtype = 'complex128')
-        for sigma in sigmas:
+        if nside > 1:
+            # Use healpy to do convolution
+            lmax = 3*nside - 1  # default from hp.smoothing
+            Nalm = hp.Alm.getsize(lmax)
+            G = np.zeros(Nalm, dtype = 'complex128')
             H = hp.smoothalm(np.ones(Nalm), sigma = np.deg2rad(sigma), inplace = False, verbose = False)
             npix = hp.nside2npix(nside)
             m = np.zeros(npix)
             m[10] = 1
             M = hp.alm2map(hp.map2alm(m)*H, nside, verbose = False)
             G += H/max(M)
-        G /= len(sigmas)
-        self.Glist.append(G)
-        T = harp.get_trans_matrix(self.harpix, nside, nest = False, counts = True)
-        self.Tlist.append(T)
-        self.nsidelist.append(nside)
+            T = harp.get_trans_matrix(self.harpix, nside, nest = False, counts = True)
 
-        self.Slist.append(Sigma)
+            def X1(x):
+                z = harp.trans_data(T, x)
+                b = np.zeros_like(z)
+                if self.harpix.dims is not ():
+                    for i in range(self.harpix.dims[0]):
+                        alm = hp.map2alm(z[:,i])
+                        alm *= G
+                        b[:,i] = hp.alm2map(alm, nside, verbose = False)
+                else:
+                    alm = hp.map2alm(z, iter = 0)  # Older but faster routine
+                    alm *= G
+                    b = hp.alm2map(alm, nside, verbose = False)
+                return harp.trans_data(T.T, b)
+        else:
+            vec = self.harpix.get_vec()
+            N = len(self.harpix.data)
+            M = np.zeros((N, N))
+            sigma2 = np.deg2rad(sigma)**2
+            for i in range(N):
+                dist = hp.rotator.angdist(vec[:,i], vec)
+                M[i] = np.exp(-dist**2/2/sigma2)
+            def X1(x):
+                return M.dot(x)
+
+        def X0(x):
+            if Sigma is not None:
+                x = S.dot(x.T).T
+            return x
+
+        self.Xlist.append([X0, X1])
 
     def _matvec(self,x):
         result = np.zeros(self.N)
-        for nside, F, G, S, T in zip(self.nsidelist, self.Flist, self.Glist, self.Slist, self.Tlist):
-            y = x.reshape((-1,)+self.harpix.dims)*F
-            z = harp.trans_data(T, y)
-            if S is not None:
-                a = S.dot(z.T).T
-            else:
-                a = z
-            b = np.zeros_like(z)
-            if self.harpix.dims is not ():
-                for i in range(self.harpix.dims[0]):
-                    alm = hp.map2alm(a[:,i])
-                    alm *= G
-                    b[:,i] = hp.alm2map(alm, nside, verbose = False)
-            else:
-                alm = hp.map2alm(a, iter = 0)  # Older but faster routine
-                alm *= G
-                b = hp.alm2map(alm, nside, verbose = False)
-            c = harp.trans_data(T.T, b)
-            d = c.reshape((-1,)+self.harpix.dims)*F
-            result += d.flatten()
+        for F, X in zip(self.Flist, self.Xlist):
+            Y = x.reshape((-1,)+self.harpix.dims)*F
+
+            Y = X[0](Y)
+            Y = X[1](Y)
+
+            result += (Y.reshape((-1,)+self.harpix.dims)*F).flatten()
         return result
 
 def get_sigma(x, f):
