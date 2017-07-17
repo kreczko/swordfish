@@ -6,12 +6,12 @@ import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
 
-class Model(object):  # Everything is flux!
-    """Model(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
+class Rockfish(object):  # Everything is flux!
+    """Rockfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
     """
     def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
             verbose = False):
-        """Construct rockfish model from model input.
+        """Construct rockfish model from input.
 
         Arguments
         ---------
@@ -152,13 +152,55 @@ class Model(object):  # Everything is flux!
         return eff_F
 
 class EffectiveCounts(object):
+    """EffectiveCounts(model).
+    """
     def __init__(self, model):
+        """Construct EffectiveCounts object.
+
+        Paramters
+        ---------
+        model : Rockfish
+            Input Rockfish model.
+
+        Note: The functionality applies *only* to additive component models.
+        You have been warned.
+        """
         self.model = model
 
     def counts(self, i, theta):
+        """Return total counts.
+
+        Parameters
+        ----------
+        i : integer
+            Component of interest.
+        theta : float
+            Normalization of component i.
+
+        Returns
+        -------
+        lambda : float
+            Number of counts in component i.
+        """
         return sum(self.model.flux[i]*self.model.exposure*theta)
 
     def effectivecounts(self, i, theta, psi = 1.):
+        """Return effective counts.
+
+        Parameters
+        ----------
+        i : integer
+            Component of interest.
+        theta : float
+            Normalization of component i.
+
+        Returns
+        -------
+        s : float
+            Effective signal counts.
+        b : float
+            Effective backgroundc counts.
+        """
         I0 = self.model.effectivefishermatrix(i, psi = psi)
         thetas = np.zeros(self.model.ncomp)
         thetas[i] = theta
@@ -170,6 +212,22 @@ class EffectiveCounts(object):
         return s, b
 
     def upperlimit(self, alpha, i, psi = 1., gaussian = False):
+        """Returns upper limits, based on effective counts method.
+
+        Parameters
+        ----------
+        alpha : float
+            Statistical significance (e.g., 95% CL is 0.05).
+        i : integer
+            Component of interest.
+        gaussian : bool, optional
+            Force gaussian errors.
+
+        Returns
+        -------
+        thetaUL : float
+            Predicted upper limit on component i.
+        """
         Z = 2.64  # FIXME
         I0 = self.model.effectivefishermatrix(i, psi = psi)
         if gaussian:

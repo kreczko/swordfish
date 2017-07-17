@@ -125,7 +125,7 @@ def CTA(m_DM, UL = True):
                 [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside =
                    0)], expo)
         systematics = None
-        m = Model(fluxes, noise, systematics, exposure, solver='cg', verbose = True)
+        m = Rockfish(fluxes, noise, systematics, exposure, solver='cg', verbose = True)
 
         # Calculate upper limits with effective counts method
         ec = EffectiveCounts(m)
@@ -148,7 +148,7 @@ def CTA(m_DM, UL = True):
                 [dict(err = bkg*unc, sigma = corr_length, Sigma = None, nside =
                    0)], expo)
         systematics = None
-        m = Model(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
+        m = Rockfish(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
         F = m.fishermatrix()
         return F
 

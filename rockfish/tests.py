@@ -61,7 +61,7 @@ def test_3d():
     noise = bg.data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*100.0
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
@@ -82,7 +82,7 @@ def test_UL():
     fluxes, noise, systematics, exposure = get_model_input(
             [sig], bg, [dict(err=bg*0.1, sigmas = [20.,], Sigma = None, nside =
                 16)], bg*100.)
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
 
     I = m.fishermatrix()
     print I
@@ -133,7 +133,7 @@ def test_simple():
     noise = bg.data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*10000.
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0, thetas = [0.000], psi = 1.)
     f = harp.HARPix.from_data(sig, F)
@@ -177,7 +177,7 @@ def test_MW_dSph():
     noise = bg.get_formatted_like(sig).data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*1.
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
@@ -195,7 +195,7 @@ def test_spectra():
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
                 )).dot(np.diag(noise))
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
     f = m.effectiveinfoflux(0)
     plt.plot(np.sqrt(fluxes[0]**2/dx/noise))
     plt.plot(np.sqrt(f/dx), label='Info flux')
@@ -258,7 +258,7 @@ def test_matrix():
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
                 )).dot(np.diag(noise))
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
     I = m.fishermatrix()
     print I
     F = m.infoflux()
@@ -276,7 +276,7 @@ def test_infoflux():
     bkg = sig
 
     fluxes, noise, systematics, exposure = get_model_input([sig], bkg, None, 1.)
-    m = Model(fluxes, noise, systematics, exposure)
+    m = Rockfish(fluxes, noise, systematics, exposure)
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F, div_sr = True)
     m = f.get_healpix(256)
