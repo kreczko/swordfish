@@ -212,6 +212,27 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
     if ylog:
         plt.gca().set_yscale('log')
 
+def loglog_from_npz(filename):
+    data = np.load(filename)
+    y_UL = data['y_UL']
+    x = data['x']
+    y = data['y']
+    G = data['G']
+    # ln derivatives
+    for i in range(len(x)):
+        for j in range(len(y)):
+            G[i,j,0,0] *= y[j]**2
+            G[i,j,1,1] *= x[i]**2
+            G[i,j,0,1] *= x[i]*y[j]
+            G[i,j,1,0] *= x[i]*y[j]
+    # log10 derivatives
+    G /= np.log10(np.e)**2
+    Gp = G*1.0
+    # Flip order
+    Gp[:,:,1,1] = G[:,:,0,0]
+    Gp[:,:,0,0] = G[:,:,1,1]
+    plt.loglog(x, y_UL)
+    fisherplot(np.log10(x), np.log10(y), Gp, xlog=True, ylog=True)
 
 def test():
     x = np.linspace(0, 2, 10)
