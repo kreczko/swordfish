@@ -5,6 +5,83 @@ from __future__ import division
 import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
+import copy
+
+
+def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
+    """Initialize minuit using non-nonsense interface."""
+    import iminuit
+    N = len(x)
+    if x_err is not None:
+        assert len(x_err) == N
+    if x_lim is not None:
+        assert len(x_lim) == N
+    if x_fix is not None:
+        assert len(x_fix) == N
+    varnames = ["x"+str(i) for i in range(1,N+1)]
+    def wf(*args):
+        x = np.array(args)
+        return f(x)
+    for i, var in enumerate(varnames):
+        kwargs[var] = x[i]
+        if x_lim is not None:
+            kwargs["limit_"+var] = x_lim[i]
+        if x_err is not None:
+            kwargs["error_"+var] = x_err[i]
+        if x_fix is not None:
+            kwargs["fix_"+var] = x_fix[i]
+    return iminuit.Minuit(wf, forced_parameters = varnames, errordef =
+            errordef, **kwargs)
+
+
+def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
+    """Create iminuit.Minuit object from input data.
+
+    The intended use of this function is to allow an easy cross-check of the
+    Rockfish results (in absence of systematic uncertainties).
+
+    Arguments
+    ---------
+    flux : function of model parameters, returns 1-D array
+        Flux.
+    noise : 1-D array
+        Noise.
+    exposure : {float, 1-D array}
+        Exposure.
+    thetas0: 1-D array
+        Initial values, define mock data.
+    thetas0_err: 1-D array
+        Initial errors.
+    **kwargs: additional arguments
+        Passed on to iminuit.Minuit.
+
+    Note
+    ----
+        The (expected) counts in the Poisson likelikhood are given by
+
+            mu(thetas) = exposure*(flux(thetas)+noise) .
+    """
+    def chi2(thetas):
+        mu = (flux(*thetas) + noise)*exposure
+        mu0 = (flux(*thetas0) + noise)*exposure
+        lnL = -(mu*np.log(mu/mu0)-mu+mu0)
+        return -lnL.sum()*2
+
+    M = _init_minuit(chi2, x = thetas0, x_err = thetas0_err, **kwargs)
+    return M
+
+def func_to_templates(flux, x, dx):
+    """Return finite differences for use in Rockfish."""
+    fluxes = []
+    #fluxes.append(flux(*x))
+    for i in range(len(x)):
+        xU = copy.copy(x)
+        xL = copy.copy(x)
+        xU[i] += dx[i]
+        xL[i] -= dx[i]
+        df = (flux(*xU) - flux(*xL))/2./dx[i]
+        fluxes.append(df)
+    return fluxes
 
 class Rockfish(object):  # Everything is flux!
     """Rockfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
@@ -60,8 +137,6 @@ class Rockfish(object):  # Everything is flux!
                     print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
                 x0 = self.flux[i]/noise if self.cache is None else self.cache/exposure
-                #print np.shape(D)
-                #D = D(np.eye(self.nbins))
                 x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-5)[0]
                 x[i] *= exposure
                 self.cache= x[i]
