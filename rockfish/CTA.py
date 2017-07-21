@@ -61,7 +61,7 @@ def dNdE_p(E):
     Gamma = 2.71
     return Norm*(E**(-Gamma))
 
-def CTA(m_DM, UL = True):
+def CTA(m_DM, UL = True, syst_flag = True):
 
     # Define energy range
     E = Logbins(0.5, 4.5, 11) 
@@ -76,20 +76,15 @@ def CTA(m_DM, UL = True):
        Interp_sig = get_los()
 
        # HARPix signal definition
-       sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
-       #sig = harp.HARPix(dims=dims).add_disc((0,0), 10, 128)
+       #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
+       sig = harp.HARPix(dims=dims).add_disc((0,0), 3, 128)
        sig.add_func(lambda d: spec_sig*Interp_sig(d), mode = 'dist', center=(0,0))
        sig *= 1e-26/8/np.pi/(m_DM**2.)  # Reference cross-section
        return sig
 
     sig = get_sig(m_DM)
-    dx = 0.1
-    dsig = (get_sig(m_DM*(1.+dx))*(1.+dx)**-2+(sig*(-1.0)))*(dx*m_DM)**-1
-
-#    plt.loglog(E.means, sig.get_integral()*E.means**1)
-#    plt.loglog(E.means, abs(dsig.get_integral())*E.means**1)
-#    plt.show()
-#    quit()
+    dx = 0.01
+    dsig = (get_sig(m_DM*(1.+dx))+(sig*(-1.0)))*(dx*m_DM)**-1
 
     # Backgrounds
     # Should be in photons/cm^2/s/sr when multiplied by dE (approx)
@@ -115,17 +110,16 @@ def CTA(m_DM, UL = True):
     EffectiveA_cm2 = EffectiveA_cm2/50./60./60. # Conversion to cm^2/s
     EffectiveA_cm2 *= 0
     EffectiveA_cm2 += 1e10
-    obsT = 0.1*60.*60. # 100 hours of observation in s
+    obsT = 100*60.*60. # 100 hours of observation in s
     expotab = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
     expo = harp.HARPix(dims=dims).add_iso(1)
     expo.add_func(lambda l, b: expotab, mode = 'lonlat')
 
     if UL:
         fluxes, noise, systematics, exposure = get_model_input([sig], bkg,
-                [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside =
-                   0)], expo)
-        systematics = None
-        m = Rockfish(fluxes, noise, systematics, exposure, solver='cg', verbose = True)
+                [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside = 0)], expo)
+        if not syst_flag: systematics = None
+        m = Rockfish(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
 
         # Calculate upper limits with effective counts method
         ec = EffectiveCounts(m)
@@ -145,24 +139,24 @@ def CTA(m_DM, UL = True):
         return UL
     else:
         fluxes, noise, systematics, exposure = get_model_input([sig, dsig], bkg,
-                [dict(err = bkg*unc, sigma = corr_length, Sigma = None, nside =
-                   0)], expo)
-        systematics = None
+                [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside = 0)], expo)
+        if not syst_flag : systematics = None
         m = Rockfish(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
         F = m.fishermatrix()
         return F
 
-def UL_plot():
-    mlist = np.logspace(1, 3, 10)
+def UL_plot(syst_flag = True):
+    mlist = np.logspace(1.3, 2.7, 10)
     svlist = np.logspace(-26, -24, 10)
     sv0 = 1e-26
     ULlist = []
     G = np.zeros((len(mlist), len(svlist),2,2))
     for i, m in enumerate(mlist):
-        UL = CTA(m, UL = True)
+        UL = CTA(m, UL = True, syst_flag = syst_flag)
         ULlist.append(UL*sv0)
-        F0 = CTA(m, UL = False)  # dtheta, dm, sv0 = 1e-26
+        F0 = CTA(m, UL = False, syst_flag = syst_flag)  # dtheta, dm, sv0 = 1e-26
         for j, sv in enumerate(svlist):
+            print sv
             F = F0.copy()
 
             # dt --> dsv, replace theta by sv
@@ -182,7 +176,7 @@ def UL_plot():
             F[1,0] *= sv*m
 
             # log10 derivatives
-            F *= np.log10(np.e)**2
+            F /= np.log10(np.e)**2
 
             G[i,j] = F
 
@@ -191,11 +185,25 @@ def UL_plot():
             #    = I_sv * sv**2 * (dlog10x/dlogx)**-2
             #    = I_sv * sv**2 * log10(e)**-2
 
-    visual.fisherplot(np.log10(mlist), np.log10(svlist), G, xlog=True, ylog=True)
+    np.savez('dump.npz', m=mlist, sv=svlist, G=G, UL=ULlist)
+
+def CTA_plot():
+    data = np.load('dump.npz')
+    ULlist = data['UL']
+    mlist = data['m']
+    svlist = data['sv']
+    G = data['G']
+    Gp = G*1.0
+    Gp[:,:,1,1] = G[:,:,0,0]
+    Gp[:,:,0,0] = G[:,:,1,1]
+
+    plt.loglog(mlist, ULlist)
+    visual.fisherplot(np.log10(mlist), np.log10(svlist), Gp, xlog=True, ylog=True)
     plt.xlim([10, 1000])
     plt.ylim([1e-26, 1e-24])
-    plt.loglog(mlist, ULlist)
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
-    UL_plot()
+    #CTA(100, UL = True, syst_flag = True)
+    UL_plot(syst_flag = True)
+    #CTA_plot()
