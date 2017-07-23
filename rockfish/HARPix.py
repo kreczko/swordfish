@@ -161,6 +161,30 @@ class HARPix():
         r.order = np.ones(npix, dtype=np.int8)*order
         return r
 
+    @classmethod
+    def from_file(cls, filename):
+        data = np.load(filename)
+        r = cls(dims = data['dims'])
+        r.ipix = data['ipix']
+        r.order = data['order']
+        r.data = data['data']
+        return r
+
+    def expand(self, values):
+        """Return new HARPix object with expanded data."""
+        n = len(values)
+        dims = self.dims + (n,)
+        r = HARPix(dims = dims)
+        r.order = self.order
+        r.ipix = self.ipix
+        data = np.tile(self.data.flatten(), n)*np.repeat(values, len(self.data.flatten()))
+        r.data = data.reshape((-1,)+dims)
+        return r
+
+    def write_file(self, filename):
+        np.savez(filename, ipix = self.ipix, order = self.order, dims = self.dims, data = self.data)
+        return self
+
     def set_data(self, data):
         assert np.prod(np.shape(self.data)) == np.prod(np.shape(data))
         self.data = data.reshape((-1,)+self.dims)
