@@ -20,7 +20,6 @@ def get_los():
     MW_rs = 20 # kpc
     alpha = 0.17
     MW_rhoS = 0.081351425781930664 # GeV cm^-3
-    m_DM = 1e3 # GeV
     kpc_cm = 3.086e21 # conversion factor
     def Lum_los(d, l, b):
         """Returns density squared for given galactic coordinates l and b at 
@@ -81,12 +80,9 @@ def get_exposure(E, Tobs):
     return harp.HARPix().add_iso(1, fill = 1.).expand(expotab)
 
 def get_Jmap():
-   # Get LOS integral
    Interp_sig = get_los()
-
-   # HARPix signal definition
    #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
-   Jmap = harp.HARPix().add_disc((0,0), 3, 128)
+   Jmap = harp.HARPix().add_disc((0,0), 3, 64)
    Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
    return Jmap
 
@@ -94,21 +90,19 @@ def get_sig_spec(sv, m, E, ch='bb'):
     spec_DM = interp.Interp(ch=ch)
     return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
 
-def CTA(m_DM, UL = True, syst_flag = True):
+def CTA(m_DM, UL = True, syst_flag = True, Tobs = 100.):
     # Parameters
     E = Logbins(0.5, 4.5, 11)   # GeV
-    Tobs = 100.  # h
-    unc = 0.01 # 1% bkg uncertainty
+    unc = 0.1 # 1% bkg uncertainty
     corr_length = 1  # 10 deg correlation length of bkg uncertainty
     Sigma = get_sigma(E.means, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
     sv0 = 1e-26
-    m0 = 100
 
     # Get J-value map
     J = get_Jmap()
 
     # Define signal spectrum
-    t = func_to_templates(lambda x, y: get_sig_spec(x*sv0, y*m0, E), [1., m_DM/m0])
+    t = func_to_templates(lambda x, y: get_sig_spec(x*sv0, y, E), [1., m_DM])
 
     # Get signal maps
     S = J.expand(t[0])
@@ -119,54 +113,44 @@ def CTA(m_DM, UL = True, syst_flag = True):
 
     # Get exposure
     expo = get_exposure(E, Tobs)
+    flux = [S,] if UL else [S,dS]
+    fluxes, noise, systematics, exposure = get_model_input(flux, B,
+            [dict(err = B*unc, sigma = corr_length, Sigma = Sigma, nside = 0)], expo)
+    if not syst_flag: systematics = None
+    m = Rockfish(fluxes, noise, systematics, exposure, solver='direct', verbose = False)
 
     if UL:
-        fluxes, noise, systematics, exposure = get_model_input([sig], bkg,
-                [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside = 0)], expo)
-        if not syst_flag: systematics = None
-        m = Rockfish(fluxes, noise, systematics, exposure, solver='direct', verbose = False)
-
         # Calculate upper limits with effective counts method
         ec = EffectiveCounts(m)
-        UL = ec.upperlimit(0.05, 0, gaussian = True)
+        x_UL = ec.upperlimit(0.05, 0, gaussian = True)
+        sv_UL = x_UL*sv0
         s, b = ec.effectivecounts(0, 1.)
+#        print "Total signal counts (theta = 1):", ec.counts(0, 1.0)
+#        print "Eff.  signal counts (theta = 1):", s
+#        print "Eff.  bkg counts (theta = 1)   :", b
+#        print "Upper limit on theta           :", sv_UL
 
-        print "Total signal counts (theta = 1):", ec.counts(0, 1.0)
-        print "Eff.  signal counts (theta = 1):", s
-        print "Eff.  bkg counts (theta = 1)   :", b
-        print "Upper limit on theta           :", UL
-
-        #F = m.effectiveinfoflux(0)
-        #f = harp.HARPix.from_data(sig, F, div_sr = True)
-        #m = f.get_healpix(512, idxs=(3,))
-        #hp.mollview(m, nest = True)
-        #plt.savefig('test.eps')
-        return UL
+        return sv_UL
     else:
-        fluxes, noise, systematics, exposure = get_model_input([sig, dsig], bkg,
-                [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside = 0)], expo)
-        if not syst_flag : systematics = None
-        m = Rockfish(fluxes, noise, systematics, exposure, solver='direct', verbose = False)
-        F = m.fishermatrix()
+        F = m.fishermatrix()  # w.r.t. (x,m)
+        F[0,0] /= sv0**2
+        F[0,1] /= sv0
+        F[1,0] /= sv0
         return F
 
-def UL_plot(syst_flag = True):
+def generate_dump(syst_flag = True):
     mlist = np.logspace(1.3, 2.7, 10)
     svlist = np.logspace(-26, -24, 10)
-    sv0 = 1e-26
     ULlist = []
     G = np.zeros((len(mlist), len(svlist),2,2))
     for i, m in enumerate(mlist):
+        print m
         UL = CTA(m, UL = True, syst_flag = syst_flag)
-        ULlist.append(UL*sv0)
+        ULlist.append(UL)
+        sv0 = 1e-26
         F0 = CTA(m, UL = False, syst_flag = syst_flag)  # dtheta, dm, sv0 = 1e-26
         for j, sv in enumerate(svlist):
             F = F0.copy()
-
-#            # dt --> dsv, replace theta by sv
-#            F[0,0] /= sv0**2
-#            F[1,0] /= sv0
-#            F[0,1] /= sv0
 
             # sv0 --> sv, take into account larger flux
             F[1,1] *= (sv/sv0)**2
@@ -184,6 +168,13 @@ def CTA_plot():
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
+    generate_dump(syst_flag = True)
+    CTA_plot()
     #CTA(100, UL = True, syst_flag = True)
-    UL_plot(syst_flag = True)
-    #CTA_plot()
+    #print CTA(100., UL = True, syst_flag = True, Tobs = .0001)
+    #print CTA(100., UL = True, syst_flag = True, Tobs = .01)
+    #print CTA(100., UL = True, syst_flag = False, Tobs = 100.)
+    #print CTA(400., UL = True, syst_flag = True, Tobs = 100.)
+    #print CTA(100., UL = True, syst_flag = True, Tobs = 10000.)
+    #print CTA(100., UL = True, syst_flag = True, Tobs = 1000000.)
+    #print CTA(100., UL = True, syst_flag = True, Tobs = 100000000.)

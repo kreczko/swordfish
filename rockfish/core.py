@@ -109,7 +109,7 @@ class Rockfish(object):  # Everything is flux!
         self.exposure = exposure
         self.cache = None
         self.verbose = verbose
-        self.scale = scale  # FIXME
+        self.scale = self._get_auto_scale() if scale == 'auto' else scale
 
         self.solver = solver
         self.nbins = len(self.noise)  # Number of bins
@@ -121,6 +121,12 @@ class Rockfish(object):  # Everything is flux!
                     (self.nbins, self.nbins), matvec = lambda x: x*0.)
 
         self.set_constraints(constraints)  # sets self.errors and self.fixed
+
+    def _get_auto_scale(self):
+        print "WARNING: Scaling not completely implemented yet."
+        return np.array([
+            1/(f*self.exposure).max() for f in self.flux
+            ])
 
     def set_constraints(self, constraints):
         """Set Gaussian constraints on flux components.
