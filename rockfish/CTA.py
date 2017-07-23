@@ -61,65 +61,70 @@ def dNdE_p(E):
     Gamma = 2.71
     return Norm*(E**(-Gamma))
 
-def CTA(m_DM, UL = True, syst_flag = True):
-
-    # Define energy range
-    E = Logbins(0.5, 4.5, 11) 
-    dims = (E.num,)  # HARPix dimensions per pixel
-
-    def get_sig(m_DM):
-       # Get dN/dE integrated over energy bins (approx.)
-       spec_DM = interp.Interp(ch='bb')
-       spec_sig = E.integrate(lambda x: spec_DM(m_DM,x))
-
-       # Get LOS integral
-       Interp_sig = get_los()
-
-       # HARPix signal definition
-       #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
-       sig = harp.HARPix(dims=dims).add_disc((0,0), 3, 128)
-       sig.add_func(lambda d: spec_sig*Interp_sig(d), mode = 'dist', center=(0,0))
-       sig *= 1e-26/8/np.pi/(m_DM**2.)  # Reference cross-section
-       return sig
-
-    sig = get_sig(m_DM)
-    dx = 0.01
-    dsig = (get_sig(m_DM*(1.+dx))+(sig*(-1.0)))*(dx*m_DM)**-1
-
-    # Backgrounds
-    # Should be in photons/cm^2/s/sr when multiplied by dE (approx)
+def get_instr_bkg(E):
     CR_Elec_bkg = E.integrate(dNdE_e)
     proton_eff = 1.e-2
     CR_Proton_bkg = proton_eff*E.integrate(dNdE_p)
     spec_bkg = CR_Proton_bkg + CR_Elec_bkg
+    return harp.HARPix().add_iso(1, fill=1.).expand(spec_bkg)
 
-    bkg = harp.HARPix(dims=dims).add_iso(1)
-    bkg.add_func(lambda l, b: spec_bkg)
-
-    # Covariance matrix for energy spectrum uncertainty (ad hoc)
-    Sigma = get_sigma(E.means, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
-
-    # Set up the rockfish
-    unc = 0.01 # 1% bkg uncertainty
-    corr_length = 1  # 10 deg correlation length of bkg uncertainty
-
+def get_exposure(E, Tobs):
     # Effective area taken from https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
     Et, EffA = np.loadtxt("CTA_effective_A.txt", unpack=True)
     EffectiveA_m2 = interp1d(Et,EffA, fill_value="extrapolate")(E.means)
     EffectiveA_cm2 = EffectiveA_m2*(100**2.) # Conversion to cm^2/50hr
     EffectiveA_cm2 = EffectiveA_cm2/50./60./60. # Conversion to cm^2/s
     EffectiveA_cm2 *= 0
-    EffectiveA_cm2 += 1e10
-    obsT = 100*60.*60. # 100 hours of observation in s
+    EffectiveA_cm2 += 1e10  # FIXME
+    obsT = Tobs*60.*60. # 100 hours of observation in s
     expotab = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
-    expo = harp.HARPix(dims=dims).add_iso(1)
-    expo.add_func(lambda l, b: expotab, mode = 'lonlat')
+    return harp.HARPix().add_iso(1, fill = 1.).expand(expotab)
+
+def get_Jmap():
+   # Get LOS integral
+   Interp_sig = get_los()
+
+   # HARPix signal definition
+   #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
+   Jmap = harp.HARPix().add_disc((0,0), 3, 128)
+   Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
+   return Jmap
+
+def get_sig_spec(sv, m, E, ch='bb'):
+    spec_DM = interp.Interp(ch=ch)
+    return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
+
+def CTA(m_DM, UL = True, syst_flag = True):
+    # Parameters
+    E = Logbins(0.5, 4.5, 11)   # GeV
+    Tobs = 100.  # h
+    unc = 0.01 # 1% bkg uncertainty
+    corr_length = 1  # 10 deg correlation length of bkg uncertainty
+    Sigma = get_sigma(E.means, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
+    sv0 = 1e-26
+    m0 = 100
+
+    # Get J-value map
+    J = get_Jmap()
+
+    # Define signal spectrum
+    t = func_to_templates(lambda x, y: get_sig_spec(x*sv0, y*m0, E), [1., m_DM/m0])
+
+    # Get signal maps
+    S = J.expand(t[0])
+    dS = J.expand(t[1])
+
+    # Get background (instr.)
+    B = get_instr_bkg(E)
+
+    # Get exposure
+    expo = get_exposure(E, Tobs)
 
     if UL:
         fluxes, noise, systematics, exposure = get_model_input([sig], bkg,
                 [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside = 0)], expo)
         if not syst_flag: systematics = None
-        m = Rockfish(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
+        m = Rockfish(fluxes, noise, systematics, exposure, solver='direct', verbose = False)
 
         # Calculate upper limits with effective counts method
         ec = EffectiveCounts(m)
@@ -141,7 +146,7 @@ def CTA(m_DM, UL = True, syst_flag = True):
         fluxes, noise, systematics, exposure = get_model_input([sig, dsig], bkg,
                 [dict(err = bkg*unc, sigma = corr_length, Sigma = Sigma, nside = 0)], expo)
         if not syst_flag : systematics = None
-        m = Rockfish(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
+        m = Rockfish(fluxes, noise, systematics, exposure, solver='direct', verbose = False)
         F = m.fishermatrix()
         return F
 
@@ -156,49 +161,24 @@ def UL_plot(syst_flag = True):
         ULlist.append(UL*sv0)
         F0 = CTA(m, UL = False, syst_flag = syst_flag)  # dtheta, dm, sv0 = 1e-26
         for j, sv in enumerate(svlist):
-            print sv
             F = F0.copy()
 
-            # dt --> dsv, replace theta by sv
-            F[0,0] /= sv0**2
-            F[1,0] /= sv0
-            F[0,1] /= sv0
+#            # dt --> dsv, replace theta by sv
+#            F[0,0] /= sv0**2
+#            F[1,0] /= sv0
+#            F[0,1] /= sv0
 
             # sv0 --> sv, take into account larger flux
             F[1,1] *= (sv/sv0)**2
             F[0,1] *= sv/sv0
             F[1,0] *= sv/sv0
 
-            # ln derivatives
-            F[0,0] *= sv**2
-            F[1,1] *= m**2
-            F[0,1] *= sv*m
-            F[1,0] *= sv*m
-
-            # log10 derivatives
-            F /= np.log10(np.e)**2
-
             G[i,j] = F
 
-            # I_sv = I_t (dt/dsv)**2 = I_t / sv0**2
-            # I_log10(sv) = I_sv (dlog10(sv)/dsv)**-2 
-            #    = I_sv * sv**2 * (dlog10x/dlogx)**-2
-            #    = I_sv * sv**2 * log10(e)**-2
-
-    np.savez('dump.npz', m=mlist, sv=svlist, G=G, UL=ULlist)
+    np.savez('dump.npz', x=mlist, y=svlist, G=G, y_UL=ULlist)
 
 def CTA_plot():
-    data = np.load('dump.npz')
-    ULlist = data['UL']
-    mlist = data['m']
-    svlist = data['sv']
-    G = data['G']
-    Gp = G*1.0
-    Gp[:,:,1,1] = G[:,:,0,0]
-    Gp[:,:,0,0] = G[:,:,1,1]
-
-    plt.loglog(mlist, ULlist)
-    visual.fisherplot(np.log10(mlist), np.log10(svlist), Gp, xlog=True, ylog=True)
+    visual.loglog_from_npz('dump.npz')
     plt.xlim([10, 1000])
     plt.ylim([1e-26, 1e-24])
     plt.savefig('test.eps')

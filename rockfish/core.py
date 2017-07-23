@@ -70,8 +70,11 @@ def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
     M = _init_minuit(chi2, x = thetas0, x_err = thetas0_err, **kwargs)
     return M
 
-def func_to_templates(flux, x, dx):
+def func_to_templates(flux, x, dx = None):
     """Return finite differences for use in Rockfish."""
+    x = np.array(x)
+    if dx is None:
+        dx = x*0.01
     fluxes = []
     #fluxes.append(flux(*x))
     for i in range(len(x)):
@@ -87,7 +90,7 @@ class Rockfish(object):  # Everything is flux!
     """Rockfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
     """
     def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
-            verbose = False):
+            verbose = False, constraints = None, scale = 'auto'):
         """Construct rockfish model from input.
 
         Arguments
@@ -98,12 +101,15 @@ class Rockfish(object):  # Everything is flux!
         exposure : {float, 1-D array}
         solver : {'direct', 'cg'}, optional
         verbose : bool, optional
+        constraints : 1-D array, optional
+        scale : {1-D array, 'auto'}
         """
         self.flux = flux
         self.noise = noise
         self.exposure = exposure
         self.cache = None
         self.verbose = verbose
+        self.scale = scale  # FIXME
 
         self.solver = solver
         self.nbins = len(self.noise)  # Number of bins
@@ -113,6 +119,36 @@ class Rockfish(object):  # Everything is flux!
         else:
             self.systematics = la.LinearOperator(
                     (self.nbins, self.nbins), matvec = lambda x: x*0.)
+
+        self.set_constraints(constraints)  # sets self.errors and self.fixed
+
+    def set_constraints(self, constraints):
+        """Set Gaussian constraints on flux components.
+
+        List of constraints will be interpreted as 1-sigma errors.  Special
+        list item values:
+        - Zero means that the component is fixed.
+        - None or inf means that the component is unconstrained.
+
+        Note: constrains = None means that no constrants are applies.
+
+        Arguments
+        ---------
+        constraints : {None, list, 1-D array}
+        """
+        print "WARNING: Constraints not completely implemented yet."
+        assert constraints is None or len(constraints) == self.ncomp
+        if constraints is not None:
+            errors = np.array([
+                    np.inf if x is None or x == np.inf else x for x in constraints
+                    ])
+            fixed = np.array([x == 0. for x in constraints])
+            self.errors = errors
+            self.fixed = fixed
+        else:
+            self.errors = np.ones(self.ncomp)*np.inf
+            self.fixed = np.zeros(self.ncomp, dtype='bool')
+        return self
 
     def _solveD(self, thetas = None, psi = 1.):
         noise = self.noise*1.  # Make copy
