@@ -14,6 +14,10 @@ from math import cos, sin
 from PPPC4DMID import interp
 import visual
 
+#################
+# DM distribution
+#################
+
 def get_los():
     # Define DM profile
     MW_D = 8.5 # kpc
@@ -44,6 +48,18 @@ def get_los():
         los[i] = quad(Lum_los,0.,100.,args=(l[i],0.0))[0]*kpc_cm
     Interp_sig = interp1d(l,los)
     return Interp_sig
+
+def get_Jmap():
+   Interp_sig = get_los()
+   #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
+   Jmap = harp.HARPix().add_disc((0,0), 3, 64)
+   Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
+   return Jmap
+
+
+#######################
+# CTA characteristics
+#######################
 
 def dNdE_e(E):
      # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
@@ -79,16 +95,20 @@ def get_exposure(E, Tobs):
     expotab = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
     return harp.HARPix().add_iso(1, fill = 1.).expand(expotab)
 
-def get_Jmap():
-   Interp_sig = get_los()
-   #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
-   Jmap = harp.HARPix().add_disc((0,0), 3, 64)
-   Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
-   return Jmap
+
+##########
+# DM model
+##########
 
 def get_sig_spec(sv, m, E, ch='bb'):
     spec_DM = interp.Interp(ch=ch)
     return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
+
+
+#######################
+# Main routines
+#######################
+
 
 def CTA(m_DM, UL = True, syst_flag = True, Tobs = 100.):
     # Parameters
