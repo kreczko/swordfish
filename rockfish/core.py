@@ -7,11 +7,26 @@ import scipy.sparse.linalg as la
 import scipy.sparse as sp
 
 class Model(object):  # Everything is flux!
-    def __init__(self, flux, noise, systematics, exposure, solver = 'direct'):
+    """Model(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
+    """
+    def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
+            verbose = False):
+        """Construct rockfish model from model input.
+
+        Arguments
+        ---------
+        flux : list of 1-D arrays
+        noise : 1-D array
+        systematics : {sparse matrix, dense matrix, LinearOperator, None}
+        exposure : {float, 1-D array}
+        solver : {'direct', 'cg'}, optional
+        verbose : bool, optional
+        """
         self.flux = flux
         self.noise = noise
         self.exposure = exposure
         self.cache = None
+        self.verbose = verbose
 
         self.solver = solver
         self.nbins = len(self.noise)  # Number of bins
@@ -22,35 +37,47 @@ class Model(object):  # Everything is flux!
             self.systematics = la.LinearOperator(
                     (self.nbins, self.nbins), matvec = lambda x: x*0.)
 
-    def solveD(self, thetas = None, psi = 1.):
+    def _solveD(self, thetas = None, psi = 1.):
         noise = self.noise*1.  # Make copy
         exposure = self.exposure*psi
         if thetas is not None: 
             for i in range(max(self.ncomp, len(thetas))):
                 noise += thetas[i]*self.flux[i]
+        spexp = la.aslinearoperator(sp.diags(exposure))
         D = (
-                la.aslinearoperator(sp.diags(noise/exposure))
-                + self.systematics
+                la.aslinearoperator(sp.diags(noise*exposure))
+                + spexp*self.systematics*spexp
                 )
         x = np.zeros((self.ncomp, self.nbins))
         if self.solver == "direct":
             dense = D(np.eye(self.nbins))
             invD = np.linalg.linalg.inv(dense)
             for i in range(self.ncomp):
-                x[i] = np.dot(invD, self.flux[i])
+                x[i] = np.dot(invD, self.flux[i]*exposure)*exposure
         elif self.solver == "cg":
             def callback(x):
-                pass
-                #print len(x), sum(x), np.mean(x)
+                if self.verbose:
+                    print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
-                x[i] = la.cg(D, self.flux[i], x0 = self.cache, callback = callback, tol = 1e-5)[0]
+                x0 = self.flux[i]/noise if self.cache is None else self.cache/exposure
+                #print np.shape(D)
+                #D = D(np.eye(self.nbins))
+                x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-5)[0]
+                x[i] *= exposure
                 self.cache= x[i]
         else:
             raise KeyError("Solver unknown.")
         return x, noise, exposure
 
     def fishermatrix(self, thetas = None, psi = 1.):
-        x, noise, exposure = self.solveD(thetas=thetas, psi=psi)
+        """Return Fisher Information Matrix.
+
+        Arguments
+        ---------
+        thetas : array-like, optional
+            Flux components added to noise during evaluation.
+        """
+        x, noise, exposure = self._solveD(thetas=thetas, psi=psi)
         I = np.zeros((self.ncomp,self.ncomp))
         for i in range(self.ncomp):
             for j in range(i+1):
@@ -60,7 +87,14 @@ class Model(object):  # Everything is flux!
         return I
 
     def infoflux(self, thetas = None, psi = 1.):
-        x, noise, exposure = self.solveD(thetas=thetas, psi=psi)
+        """Return Fisher Information Flux.
+
+        Arguments
+        ---------
+        thetas : array-like, optional
+            Flux components added to noise during evaluation.
+        """
+        x, noise, exposure = self._solveD(thetas=thetas, psi=psi)
 
         F = np.zeros((self.ncomp,self.ncomp,self.nbins))
         for i in range(self.ncomp):
@@ -71,11 +105,29 @@ class Model(object):  # Everything is flux!
         return F
 
     def effectivefishermatrix(self, i, **kwargs):
+        """Return effective Fisher Information Matrix.
+
+        Arguments
+        ---------
+        i : integer
+            index of component of interest
+        **kwargs
+            Passed on to fishermatrix
+        """
         I = self.fishermatrix(**kwargs)
         invI = np.linalg.linalg.inv(I)
         return 1./invI[i,i]
 
     def effectiveinfoflux(self, i, **kwargs):
+        """Return effective Fisher Information Flux.
+
+        Arguments
+        ---------
+        i : integer
+            index of component of interest
+        **kwargs
+            Passed on to fishermatrix
+        """
         F = self.infoflux(**kwargs)
         I = self.fishermatrix(**kwargs)
         n = self.ncomp
@@ -141,6 +193,7 @@ class EffectiveCounts(object):
                         break
                     else:
                         theta_list.append(theta*1.3)
+                    #print theta, z_list
                 thetaUL = np.interp(Z, z_list, theta_list)
             return thetaUL
 

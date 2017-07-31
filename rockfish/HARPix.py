@@ -167,9 +167,11 @@ class HARPix():
         return self
 
     @classmethod
-    def from_data(cls, h, data):
+    def from_data(cls, h, data, div_sr = False):
         H = deepcopy(h)
         H.set_data(data)
+        if div_sr:
+            H._div_sr()
         return H
 
     def get_data(self, mul_sr = False):
@@ -368,12 +370,12 @@ class HARPix():
         M = (self.data.T*sr).T
         return M.sum(axis=0)
 
-    def mul_sr(self):
+    def _mul_sr(self):
         sr = 4*np.pi/12*4.**-self.order
         self.data = (self.data.T*sr).T
         return self
 
-    def div_sr(self):
+    def _div_sr(self):
         sr = 4*np.pi/12*4.**-self.order
         self.data = (self.data.T/sr).T
         return self
@@ -430,16 +432,31 @@ class HARPix():
         return self
 
     def get_lonlat(self):
+        return self._get_position(lonlat = True)
+
+    def get_vec(self):
+        return self._get_position(lonlat = False)
+
+    def _get_position(self, lonlat = False):
         orders = np.unique(self.order)
-        lon = np.zeros(len(self.data))
-        lat = np.zeros(len(self.data))
+        if lonlat:
+            lon = np.zeros(len(self.data))
+            lat = np.zeros(len(self.data))
+        else:
+            vec = np.zeros((3, len(self.data)))
         for o in orders:
             nside = hp.order2nside(o)
             mask = self.order == o
             ipix = self.ipix[mask]
-            lon[mask], lat[mask] = hp.pix2ang(nside, ipix, nest = True, lonlat = True)
-        lon = np.mod(lon+180, 360) - 180
-        return lon, lat
+            if lonlat:
+                lon[mask], lat[mask] = hp.pix2ang(nside, ipix, nest = True, lonlat = True)
+            else:
+                vec[:,mask] = hp.pix2vec(nside, ipix, nest = True)
+        if lonlat:
+            lon = np.mod(lon+180, 360) - 180
+            return lon, lat
+        else:
+            return vec
 
 def test():
     dims = (10,3)
