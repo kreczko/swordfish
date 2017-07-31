@@ -67,7 +67,7 @@ def test_3d():
     f = harp.HARPix.from_data(sig, F)
     f.div_sr()
     plot_harp(f, 'test.eps', dims = (11,))
-    plot_rock(f, 'test.eps')
+    plot_rock(f, 'test2.eps')
 
 
 def test_UL():
@@ -142,6 +142,7 @@ def test_simple():
     quit()
 
 def test_MW_dSph():
+    nside=32
     def plot_harp(h, filename):
         m = h.get_healpix(128)
         hp.mollview(np.log10(m), nest=True)
@@ -151,7 +152,7 @@ def test_MW_dSph():
 
     # Signal definition
     spec = 1.
-    MW = harp.HARPix(dims = dims).add_iso(8).add_singularity((0,0), 0.1, 20, n = 100)
+    MW = harp.HARPix(dims = dims).add_iso(8).add_singularity((0,0), 0.1, 2., n = 100)
     MW.add_func(lambda d: spec/(.1+d)**2, mode = 'dist', center=(0,0))
     pos = (50, 40)
     dSph = harp.HARPix(dims = dims).add_singularity(pos, 0.1, 20, n = 100)
@@ -169,7 +170,7 @@ def test_MW_dSph():
     cov = HARPix_Sigma(sig)
     var = bg*bg
     var.data *= 0.1  # 10% uncertainty
-    cov.add_systematics(variance = var, sigmas = [100], Sigma = None, nside =
+    cov.add_systematics(err = bg*0.1, sigmas = [100], Sigma = None, nside =
             nside)
 
     # Set up rockfish
@@ -272,10 +273,11 @@ def test_matrix():
 
 
 if __name__ == "__main__":
-    #test_3d()
+    test_3d()
+    # test_MW_dSph()
     #test_covariance()
     #test_simple()
     #test_UL()
     #smoothtest()
     #test_spectra()
-    test_matrix()
+    # test_matrix()
