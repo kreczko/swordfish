@@ -433,11 +433,8 @@ def test_vf():
     plt.ylim([-2,12])
     plt.savefig('test_vf.eps')
 
-#def test2():
-#    g = np.array([[2, 0.0], [0.0, 10]])
-#    print eigen(g)
 
-def test():
+def test_tf():
     x = np.linspace(0, 10, 40)
     y = np.linspace(0, 10, 41)
 
@@ -534,5 +531,6 @@ def test():
 #    print eigen(g)
 
 if __name__ == "__main__":
-    test_vf()
+    #test_vf()
+    test_tf()
     #test()
