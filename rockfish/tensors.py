@@ -75,14 +75,14 @@ def tensor_to_vector(g):
     for i in range(N):
         for j in range(M):
             w, v = np.linalg.eig(g[:,:,i,j])
-            e1[i,j] = v[:,0], 
-            e2[i,j] = v[:,1], 
+            e1[i,j] = v[:,0]
+            e2[i,j] = v[:,1]
             L1[i,j] = w[0]
             L2[i,j] = w[1]
 
     def swap(i,j):
-        e_tmp = e1[i,j]
-        l_tmp = L1[i,j]
+        e_tmp = e1[i,j].copy()
+        l_tmp = L1[i,j].copy()
         e1[i,j] = e2[i,j]
         L1[i,j] = L2[i,j]
         e2[i,j] = e_tmp
@@ -94,14 +94,14 @@ def tensor_to_vector(g):
             if abs((e1[0,j]*e1[0,j-1]).sum())<abs((e2[0,j]*e1[0,j-1]).sum()):
                 swap(i,j)
         for i in range(1, N):
-            #      if abs((e1[i,j]*e1[i-1,j]).sum())<abs((e2[i,j]*e1[i-1,j]).sum()):
-            #         swap(i,j)
+            if abs((e1[i,j]*e1[i-1,j]).sum())<abs((e2[i,j]*e1[i-1,j]).sum()):
+                swap(i,j)
             if (e1[i,j]*e1[i-1,j]).sum() < 0:
                 e1[i,j] *= -1
             if (e2[i,j]*e2[i-1,j]).sum() < 0:
                 e2[i,j] *= -1
 
-    return e1, L1, e2, L2
+    return e1, e2, L1, L2
 
     #plt.quiver(X, Y, e1[:,:,0], e1[:,:,1])
     #plt.savefig('text.eps')
@@ -146,15 +146,22 @@ class TensorField(object):
         Christoffel_1st = self.Christoffel_1st(x, y)
         g = self.__call__(x, y)
         inv_g = np.linalg.inv(g)
+        return np.tensordot(g, Christoffel_1st, (1, 0))
         return g.dot(Christoffel_1st)
 
     def _func(self, v, t=0):
         r = np.zeros_like(v)
         G = self.Christoffel_2nd(v[0], v[1])
-        r[0] = v[2]
-        r[1] = v[3]
-        r[2] = G[0,0,0]*v[2]*v[2]+ G[0,0,1]*v[2]*v[3]+ G[0,1,0]*v[3]*v[2]+ G[0,1,1]*v[3]*v[3]
-        r[3] = G[1,0,0]*v[2]*v[2]+ G[0,0,1]*v[2]*v[3]+ G[0,1,0]*v[3]*v[2]+ G[0,1,1]*v[3]*v[3]
+        g = self.__call__(v[0], v[1])
+        norm = v[2:].T.dot(g).dot(v[2:])**0.5
+        r[0] = v[2]/norm
+        r[1] = v[3]/norm
+        r[2] = -(G[0,0,0]*v[2]*v[2]+G[0,0,1]*v[2]*v[3]+G[0,1,0]*v[3]*v[2]+G[0,1,1]*v[3]*v[3])/norm
+        r[3] = -(G[1,0,0]*v[2]*v[2]+G[1,0,1]*v[2]*v[3]+G[1,1,0]*v[3]*v[2]+G[1,1,1]*v[3]*v[3])/norm
+
+        # x' = v
+        # v' = -G(x) v v
+        # x' g x' = (ds/dt)^2
         return r
 
     def volume(self):
@@ -248,18 +255,18 @@ class VectorField(object):
         ---------
         x : 1-D array (N)
             Defines x-grid.
-        y : 1-D array (N)
+        y : 1-D array (M)
             Defines y-grid.
-        v : 2-D array (2, N)
+        v : (N, M, 2) array
             Defines vector field on grid.
-        d : 1-D array (N)
+        d : 2-D array (N,M)
             Defines distance between streamlines.
         """
   
         self.x, self.y, self.v, self.d = x, y, v, d
         self.extent = [x.min(), x.max(), y.min(), y.max()]
-        self.v0 = ip.RectBivariateSpline(x, y, v[0])
-        self.v1 = ip.RectBivariateSpline(x, y, v[1])
+        self.v0 = ip.RectBivariateSpline(x, y, v[:,:,0])
+        self.v1 = ip.RectBivariateSpline(x, y, v[:,:,1])
         self.d = ip.RectBivariateSpline(x, y, d)
         self.lines = []
 
@@ -435,96 +442,74 @@ def test_vf():
 
 
 def test_tf():
-    x = np.linspace(0, 10, 40)
-    y = np.linspace(0, 10, 41)
-
-    Y, X = np.meshgrid(y, x)
-
-    z00 = np.sin(X*3)*np.cos(Y*3)*0.0+0.3
-    z11 = np.sin(X*3)*np.cos(Y*3)*0+0.3
-    z01 = np.sin(X*3)*np.cos(Y*3)*0+0.20
-    z10 = np.sin(X*3)*np.cos(Y*3)*0+0.20
-
-    v0 = -np.ones_like(X)*1.0
-    v1 = np.sin(X/4)*2
-    v = np.array([v0, v1])
-    vo = np.array([v1, -v0])
-    d = np.sqrt(Y)*np.sqrt(X)*0.3+0.02
-    do = np.ones_like(X)*0.4
-
-    g = np.array([[z00, z01], [z10, z11]])
-
-    #m = ip.RectBivariateSpline(x, y, z, kx=3, ky=3)
-
-    #xf = np.linspace(0, 10, 1000)
-
-    #plt.plot(xf, m(xf, 1))
-    #plt.plot(xf, m(xf, 1, dx=1, dy=1))
-    #plt.plot(x, m(x, 1), marker='o', ls='')
-    #plt.show()
     plt.figure(figsize=(4,4))
 
-    x = np.linspace(-5, 5, 40)
-    y = np.linspace(-5, 5, 40)
+    metric_mode = '1'
 
-    Y, X = np.meshgrid(y, x)
-
-    z00 = np.ones_like(X)*1.0
-    z01 = np.zeros_like(X)+0.00001
-    z10 = np.zeros_like(X)+0.00001
-    z11 = np.ones_like(X)+1.0
-
-    R = np.sqrt(X**2+Y**2)
-
-    z00 += 5*Y**2/R**2
-    z01 += -5*X*Y/R**2
-    z10 += -5*X*Y/R**2
-    z11 += 5*X**2/R**2
-
-    g = np.array([[z00, z01], [z10, z11]])
-
-
-
-    vf = VectorField(x, y, v, d)
-    xseed = [5,5]
-
-    vf = VectorField(x, y, vo, do)
-    xseed = [5,5]
-    for i in range(30):
-        line = vf.streamline(xseed)
-        plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-        xseed = vf.seed()
-        if xseed is None: break
-    #quit()
-    #print vf.proximity_mask([[1, 1], [1,1]], [line])
-    #quit()
-    plt.xlim([-2,12])
-    plt.ylim([-2,12])
-
-
-    # x' = v
-    # v' = - Gamma(x) v v
+    if metric_mode == '1':
+        x = np.linspace(0, 10, 40)
+        y = np.linspace(0, 10, 41)
+        Y, X = np.meshgrid(y, x)
+        g00 = np.ones_like(X)
+        g10 = np.zeros_like(X)
+        g01 = np.zeros_like(X)
+        g11 = np.ones_like(X)
+        phi = (X-5)*0.3
+        g00 += 4.0*np.cos(phi)**2
+        g01 += 4.0*np.cos(phi)*np.sin(phi)
+        g10 += 4.0*np.cos(phi)*np.sin(phi)
+        g11 += 4.0*np.sin(phi)**2
+        g = np.array([[g00, g01], [g10, g11]])
+    elif metric_mode == '2':
+        x = np.linspace(-5, 5, 40)
+        y = np.linspace(-5, 5, 40)
+        Y, X = np.meshgrid(y, x)
+        g00 = np.ones_like(X)*1.0
+        g01 = np.zeros_like(X)+0.00001
+        g10 = np.zeros_like(X)+0.00001
+        g11 = np.ones_like(X)+1.0
+        R = np.sqrt(X**2+Y**2)
+        g00 += 5*Y**2/R**2
+        g01 += -5*X*Y/R**2
+        g10 += -5*X*Y/R**2
+        g11 += 5*X**2/R**2
+        g = np.array([[g00, g01], [g10, g11]])
 
     tf = TensorField(x, y, g)
 
-    t = np.linspace(0, 5, 10)
-    y = odeint(tf._func, [3, 3, 0., 1], t)
-    plt.plot(y[:,0], y[:,1], 'r')
-    plt.savefig('text.eps')
-    quit()
+    # Plot geodesic
+    t = np.linspace(0, 0.7, 100)
+    for phi in np.linspace(0, 2*np.pi, 65):
+        s = odeint(tf._func, [2, 8, np.sin(phi), np.cos(phi)], t)
+        plt.plot(s[:,0], s[:,1], 'b', lw=0.3)
+    
+    e1, e2, l1, l2 = tensor_to_vector(g)
+
+    #plt.quiver(X, Y, e2[:,:,0], e2[:,:,1])
+
+    vf = VectorField(x, y, e1, l2**-0.5)
+    lines = vf.get_streamlines([5,5], Nmax = 100)
+    for line in lines:
+        plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
+
+    vf = VectorField(x, y, e2, l1**-0.5)
+    lines = vf.get_streamlines([5,5], Nmax = 100)
+    for line in lines:
+        plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
 
     #plt.scatter(sample[:,0], sample[:,1], marker='.')
-    for i in range(20):
-        print i
-        sample = tf.relax(sample, spring=False)
+#    for i in range(20):
+#        print i
+#        sample = tf.relax(sample, spring=False)
     #for i in range(1000):
     #   print i
     #   sample = tf.relax(sample, spring=True)
        #plt.scatter(sample[:,0], sample[:,1], marker='.', zorder=100)
-    tf.ellipses(sample)
+
     plt.xlim([-2,12])
     plt.ylim([-2,12])
-    plt.savefig('text.eps')
+    plt.savefig('test_tf.eps')
+    quit()
 
 #def test2():
 #    g = np.array([[2, 0.0], [0.0, 10]])
