@@ -281,7 +281,7 @@ class VectorField(object):
         """
         return self.d(x[0], x[1])[0,0]
 
-    def boundary_mask(self, seg):
+    def _boundary_mask(self, seg, boundaries):
         """Returns mask for line segments outside of the boundaries.
 
         Arguments
@@ -295,9 +295,11 @@ class VectorField(object):
         """
         xmin, xmax, ymin, ymax = self.extent
         mask = (seg[:,0] < xmax) & (seg[:,0] > xmin)& (seg[:,1] < ymax)& (seg[:,1] > ymin)
+        if boundaries is not None:
+            mask *= boundaries(seg[:,0], seg[:,1])
         return mask
 
-    def proximity_mask(self, seg):
+    def _proximity_mask(self, seg, lines):
         """Returns mask for line segments that lie to close to other lines.
 
         Arguments
@@ -311,16 +313,17 @@ class VectorField(object):
         """
         mask = np.ones(len(seg), dtype='bool')
         for i, x in enumerate(seg):
-            for line in self.lines:
+            for line in lines:
                 dist_min = np.sqrt(((x-line)**2).sum(axis=1)).min()
                 #dist_min_major = abs(((x-line)*self.major(x)).sum(axis=1)).min()
                 #dist_min_minor = abs(((x-line)*self.minor(x)).sum(axis=1)).min()
-                if dist_min < self.d(x[0], x[1])[0][0]*0.7:
+                # FIXME: Hardcoded minimal distance
+                if dist_min < self.dist(x)*0.75:
                     mask[i:] = False
                     return mask
         return mask
 
-    def streamline(self, xinit):
+    def _get_streamline(self, xinit, lines, boundaries):
         """Generate next streamline.
 
         Arguments
@@ -328,34 +331,34 @@ class VectorField(object):
         xinit : 1-D array
             Start position.
         """
-        l = [xinit]
+        l = []
         while True:
-            t = np.linspace(0, 1, 20)
-            x0 = l[-1]
+            t = np.linspace(0, 1, 10)
+            x0 = l[-1] if l != [] else xinit
             lnew = odeint(self.__call__, x0, t)
-            maskb = self.boundary_mask(lnew)
-            maskp = self.proximity_mask(lnew)
+            maskb = self._boundary_mask(lnew, boundaries)
+            maskp = self._proximity_mask(lnew, lines)
             if all(maskb) and all(maskp):
                 l.extend(lnew)
             else:
                 l.extend(lnew[maskb&maskp])
                 break
+        l.reverse()
         while True:
-            t = np.linspace(0, -1, 20)
-            x0 = l[-1]
+            t = np.linspace(0, -1, 10)
+            x0 = l[-1] if l != [] else xinit
             lnew = odeint(self.__call__, x0, t)
-            maskb = self.boundary_mask(lnew)
-            maskp = self.proximity_mask(lnew)
+            maskb = self._boundary_mask(lnew, boundaries)
+            maskp = self._proximity_mask(lnew, lines)
             if all(maskb) and all(maskp):
                 l.extend(lnew)
             else:
                 l.extend(lnew[maskb&maskp])
                 break
         line = np.array(l)
-        self.lines.append(line)
         return line
 
-    def seed(self, Nmax = 1000):
+    def _seed(self, lines, Nmax = 1000, boundaries = None):
         """Generate new seed position for next streamline.
   
         Arguments
@@ -364,34 +367,40 @@ class VectorField(object):
             Maximum number of trials, default is 1000.
         """
         for k in range(Nmax):
-            j = randint(0, len(self.lines)-1)
-            i = randint(0, len(self.lines[j])-1)
-            x = self.lines[j][i]
+            j = randint(0, len(lines)-1)
+            i = randint(0, len(lines[j])-1)
+            x = lines[j][i]
             v = self.__call__(x)
             v_orth = np.array([v[1], -v[0]])/(v[0]**2+v[1]**2)**0.5
             xseed = x + v_orth*self.dist(x)*(-1)**randint(0,1)
-            inbounds = self.boundary_mask(np.array([xseed]))[0]
-            notclose = self.proximity_mask(np.array([xseed]))[0]
+            inbounds = self._boundary_mask(np.array([xseed]), boundaries)[0]
+            notclose = self._proximity_mask(np.array([xseed]), lines)[0]
     #         plt.plot([x[0],xseed[0]], [x[1],xseed[1]], marker='', ls='-', color='b')
     #         plt.plot(xseed[0], xseed[1], marker='.', ls='', color='b')
             if inbounds & notclose:
                 return xseed
         return None
 
-    def get_streamlines(self, xinit, Nmax = 30):
+    def get_streamlines(self, xinit, mask = None, Nmax = 100):
         """Generate streamlines.
 
         Arguments
         ---------
+        xinit: (2) array
+            Position of initial streamline.
+        mask : function
+            Boolean valued mask function.
         Nmax : int (optional)
             Maximum number of requested streamlines, default 30.
         """
+        lines = []
+        xseed = xinit
         for i in range(Nmax):
-            line = vf.streamline(xseed)
-           #plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-            xseed = vf.seed()
+            line = self._get_streamline(xseed, lines, mask)
+            lines.append(line)
+            xseed = self._seed(lines, boundaries = mask)
             if xseed is None: break
-        return self.lines
+        return lines
 
 def test_vf():
     plt.figure(figsize=(4,4))
@@ -410,20 +419,15 @@ def test_vf():
     do = np.ones_like(X)*0.4
 
     vf = VectorField(x, y, v, d)
-    xseed = [5,5]
-    for i in range(200):
-        line = vf.streamline(xseed)
+    mask = lambda x, y: ((x-5)**2+(y-5)**2)**0.5<5
+    lines = vf.get_streamlines([5,5], mask = mask)
+    for line in lines:
         plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-        xseed = vf.seed()
-        if xseed is None: break
 
     vf = VectorField(x, y, vo, do)
-    xseed = [5,5]
-    for i in range(200):
-        line = vf.streamline(xseed)
+    lines = vf.get_streamlines([5,5], mask = mask)
+    for line in lines:
         plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-        xseed = vf.seed()
-        if xseed is None: break
 
     plt.xlim([-2,12])
     plt.ylim([-2,12])
