@@ -9,53 +9,50 @@ import pylab as plt
 from matplotlib.patches import Ellipse
 from random import randint
 
-def tensor_to_vector(g):
-    # Generate vector field
-    _, _, N, M = np.shape(g)
-    L1 = np.zeros((N,M))
-    L2 = np.zeros((N,M))
-    e1 = np.zeros((N,M,2))
-    e2 = np.zeros((N,M,2))
-    for i in range(N):
-        for j in range(M):
-            w, v = np.linalg.eig(g[:,:,i,j])
-            e1[i,j] = v[:,0]
-            e2[i,j] = v[:,1]
-            L1[i,j] = w[0]
-            L2[i,j] = w[1]
-
-    def swap(i,j):
-        e_tmp = e1[i,j].copy()
-        l_tmp = L1[i,j].copy()
-        e1[i,j] = e2[i,j]
-        L1[i,j] = L2[i,j]
-        e2[i,j] = e_tmp
-        L2[i,j] = l_tmp
-
-    # Reorder vector field
-    for j in range(0, M):
-        if j > 0:
-            if abs((e1[0,j]*e1[0,j-1]).sum())<abs((e2[0,j]*e1[0,j-1]).sum()):
-                swap(i,j)
-        for i in range(1, N):
-            if abs((e1[i,j]*e1[i-1,j]).sum())<abs((e2[i,j]*e1[i-1,j]).sum()):
-                swap(i,j)
-            if (e1[i,j]*e1[i-1,j]).sum() < 0:
-                e1[i,j] *= -1
-            if (e2[i,j]*e2[i-1,j]).sum() < 0:
-                e2[i,j] *= -1
-
-    return e1, e2, L1, L2
-
 class TensorField(object):
     """Object to generate tensor field."""
-    def __init__(self, x, y, z):
-        self.x, self.y, self.z = x, y, z
+    def __init__(self, x, y, g, logx = False, logy = False):
+        """Create TensorField object.
+
+        Arguments
+        ---------
+        x : (N,) array
+            Array with x-coordinates.
+        y : (M,) array
+            Array with y-coordinates.
+        g : (M, N, 2, 2)
+            Metric grid, using cartesian indexing.
+        logx : boolean (optional)
+            Convert x -> log10(x), default false.
+        logy : boolean (optional)
+            Convert y -> log10(y), default false.
+        """
+        if logx or logy:
+            x, y, g = self._log10_converter(x, y, g, logx, logy)
+        self.x, self.y, self.g = x, y, g
         self.extent = [x.min(), x.max(), y.min(), y.max()]
-        self.g00 = ip.RectBivariateSpline(x, y, z[0,0])
-        self.g11 = ip.RectBivariateSpline(x, y, z[1,1])
-        self.g01 = ip.RectBivariateSpline(x, y, z[0,1])
+        gt = g.transpose((1,0,2,3))  # Cartesian --> matrix indexing
+        self.g00 = ip.RectBivariateSpline(x, y, gt[:,:,0,0])
+        self.g11 = ip.RectBivariateSpline(x, y, gt[:,:,1,1])
+        self.g01 = ip.RectBivariateSpline(x, y, gt[:,:,0,1])
         self.g10 = self.g01
+
+    @staticmethod
+    def _log10_converter(x, y, g, logx, logy):
+        if logx and x.min()<=0:
+            raise ValueError("x-coordinates must be non-negative if logx = True.")
+        if logy and y.min()<=0:
+            raise ValueError("y-coordinates must be non-negative if logy = True.")
+        for i in range(len(y)):
+            for j in range(len(x)):
+                g[i,j,0,0] *= x[j]**(logx*2)
+                g[i,j,1,1] *= y[i]**(logy*2)
+                g[i,j,0,1] *= x[j]**logx*y[i]**logy
+                g[i,j,1,0] *= x[j]**logx*y[i]**logy
+        if logx: x = np.log10(x)
+        if logy: y = np.log10(y)
+        g /= np.log10(np.e)**2
+        return x, y, g
 
     def __call__(self, x, y, dx = 0, dy = 0):
         g00 = self.g00(x, y, dx = dx, dy = dy)[0,0]
@@ -63,6 +60,14 @@ class TensorField(object):
         g01 = self.g01(x, y, dx = dx, dy = dy)[0,0]
         g10 = g01
         return np.array([[g00, g01], [g10, g11]])
+
+    def writeto(self, filename):
+        np.savez(filename, x=self.x, y=self.y, g=self.g)
+
+    @classmethod
+    def fromfile(cls, filename):
+        data = np.load(filename)
+        return cls(data['x'], data['y'], data['g'])
 
     def Christoffel_1st(self, x, y):
         """Return Christoffel symbols, Gamma_{abc}."""
@@ -169,6 +174,82 @@ class TensorField(object):
                  ec='0.1', fc = '0.5', angle = ang)
             plt.gca().add_patch(e)
 
+    def get_contour(self, x0, s0, Npoints = 64, **kwargs):
+        """Plot geodesic sphere.
+
+        Arguments
+        ---------
+        x0 : (2) array
+            Central position
+        s0 : float
+            Geodesic distance
+        Npoints : integer (optional)
+            Number of points, default 64
+        """
+        t = np.linspace(0, s0, 30)
+        contour = []
+        for phi in np.linspace(0, 2*np.pi, Npoints+1):
+            g0 = self.__call__(x0[0], x0[1])
+            v = np.array([np.cos(phi), np.sin(phi)])
+            norm = v.T.dot(g0).dot(v)**0.5
+            v /= norm
+            s = odeint(self._func, [x0[0], x0[1], v[0], v[1]], t)
+            contour.append(s[-1])
+            #plt.plot(s[:,0], s[:,1], 'b', lw=0.1)
+        return np.array(contour)
+
+    def get_VectorFields(self):
+        """Generate vector fields from tensor field.
+
+        Note: The separation and ordering of the two vector fields breaks
+        likely down in the presence of singularities.
+
+        Returns
+        -------
+        vf1, vf2 : VectorFields
+        """
+        g = self.g
+        N, M, _, _ = np.shape(g)
+        L1 = np.zeros((N,M))
+        L2 = np.zeros((N,M))
+        e1 = np.zeros((N,M,2))
+        e2 = np.zeros((N,M,2))
+        for i in range(N):
+            for j in range(M):
+                w, v = np.linalg.eig(g[i,j])
+                e1[i,j] = v[:,0]
+                e2[i,j] = v[:,1]
+                L1[i,j] = w[0]
+                L2[i,j] = w[1]
+
+        def swap(i,j):
+            e_tmp = e1[i,j].copy()
+            l_tmp = L1[i,j].copy()
+            e1[i,j] = e2[i,j]
+            L1[i,j] = L2[i,j]
+            e2[i,j] = e_tmp
+            L2[i,j] = l_tmp
+
+        # Reorder vector field
+        for j in range(0, M):
+            if j > 0:
+                if abs((e1[0,j]*e1[0,j-1]).sum())<abs((e2[0,j]*e1[0,j-1]).sum()):
+                    swap(0,j)
+                if (e1[0,j]*e1[0,j-1]).sum() < 0:
+                    e1[0,j] *= -1
+                if (e2[0,j]*e2[0,j-1]).sum() < 0:
+                    e2[0,j] *= -1
+            for i in range(1, N):
+                if abs((e1[i,j]*e1[i-1,j]).sum())<abs((e2[i,j]*e1[i-1,j]).sum()):
+                    swap(i,j)
+                if (e1[i,j]*e1[i-1,j]).sum() < 0:
+                    e1[i,j] *= -1
+                if (e2[i,j]*e2[i-1,j]).sum() < 0:
+                    e2[i,j] *= -1
+
+        vf1 = VectorField(self.x, self.y, e1, L2**-0.5)
+        vf2 = VectorField(self.x, self.y, e2, L1**-0.5)
+        return vf1, vf2
 
 class VectorField(object):
     """VectorField(x, y, v, d)
@@ -185,17 +266,19 @@ class VectorField(object):
             Defines x-grid.
         y : 1-D array (M)
             Defines y-grid.
-        v : (N, M, 2) array
-            Defines vector field on grid.
-        d : 2-D array (N,M)
+        v : (M, N, 2) array
+            Defines vector field on grid, using cartesian indexing.
+        d : 2-D array (M,N)
             Defines distance between streamlines.
         """
   
         self.x, self.y, self.v, self.d = x, y, v, d
         self.extent = [x.min(), x.max(), y.min(), y.max()]
-        self.v0 = ip.RectBivariateSpline(x, y, v[:,:,0])
-        self.v1 = ip.RectBivariateSpline(x, y, v[:,:,1])
-        self.d = ip.RectBivariateSpline(x, y, d)
+        vt = v.transpose((1,0,2))  # Cartesian --> matrix indexing
+        dt = d.transpose((1,0))  # Cartesian --> matrix indexing
+        self.v0 = ip.RectBivariateSpline(x, y, vt[:,:,0])
+        self.v1 = ip.RectBivariateSpline(x, y, vt[:,:,1])
+        self.d = ip.RectBivariateSpline(x, y, dt)
         self.lines = []
 
     def __call__(self, x, t=0):
@@ -268,6 +351,7 @@ class VectorField(object):
         """
         l = []
         while True:
+            # FIXME: what is optimal stepsize?
             t = np.linspace(0, 1, 10)
             x0 = l[-1] if l != [] else xinit
             lnew = odeint(self.__call__, x0, t)
@@ -280,7 +364,8 @@ class VectorField(object):
                 break
         l.reverse()
         while True:
-            t = np.linspace(0, -1, 10)
+            # FIXME: what is optimal stepsize?
+            t = np.linspace(0, -1, 100)
             x0 = l[-1] if l != [] else xinit
             lnew = odeint(self.__call__, x0, t)
             maskb = self._boundary_mask(lnew, boundaries)
@@ -338,19 +423,22 @@ class VectorField(object):
         return lines
 
 def test_vf():
+    """Test VectorField with mask."""
     plt.figure(figsize=(4,4))
 
     x = np.linspace(0, 10, 40)
     y = np.linspace(0, 10, 41)
-    Y, X = np.meshgrid(y, x)
+    X, Y = np.meshgrid(x, y)
 
     v0 = -np.ones_like(X)*1.0
     v1 = np.sin(X/4)*2
 
     v = np.array([v0, v1])
+    v = v.transpose((1,2,0))
     d = np.sqrt(Y)*np.sqrt(X)*0.3+0.02
 
     vo = np.array([v1, -v0])
+    vo = vo.transpose((1,2,0))
     do = np.ones_like(X)*0.4
 
     vf = VectorField(x, y, v, d)
@@ -368,85 +456,60 @@ def test_vf():
     plt.ylim([-2,12])
     plt.savefig('test_vf.eps')
 
-
-def test_tf():
+def test_tf(logscale = False, xinit = [3,3]):
+    """Test TensorField and VectorField."""
     plt.figure(figsize=(4,4))
 
-    metric_mode = '1'
+    xinit = np.array(xinit)
 
-    if metric_mode == '1':
-        x = np.linspace(0, 10, 40)
-        y = np.linspace(0, 10, 41)
-        Y, X = np.meshgrid(y, x)
-        g00 = np.ones_like(X)
-        g10 = np.zeros_like(X)
-        g01 = np.zeros_like(X)
-        g11 = np.ones_like(X)
-        phi = (X-5)*0.3
-        beta = 10
-        g00 += beta*np.cos(phi)**2
-        g01 += beta*np.cos(phi)*np.sin(phi)
-        g10 += beta*np.cos(phi)*np.sin(phi)
-        g11 += beta*np.sin(phi)**2
-        g = np.array([[g00, g01], [g10, g11]])
-    elif metric_mode == '2':
-        x = np.linspace(-5, 5, 40)
-        y = np.linspace(-5, 5, 40)
-        Y, X = np.meshgrid(y, x)
-        g00 = np.ones_like(X)*1.0
-        g01 = np.zeros_like(X)+0.00001
-        g10 = np.zeros_like(X)+0.00001
-        g11 = np.ones_like(X)+1.0
-        R = np.sqrt(X**2+Y**2)
-        g00 += 5*Y**2/R**2
-        g01 += -5*X*Y/R**2
-        g10 += -5*X*Y/R**2
-        g11 += 5*X**2/R**2
-        g = np.array([[g00, g01], [g10, g11]])
+    # Generate test-metric
+    x = np.linspace(.1, 10, 20)
+    y = np.linspace(.1, 10, 20)
+    X, Y = np.meshgrid(x, y)
+    g00 = np.ones_like(X)
+    g10 = np.zeros_like(X)
+    g01 = np.zeros_like(X)
+    g11 = np.ones_like(X)
+    phi = (X-5)*0.3
+    beta = 10
+    g00 += beta*np.cos(phi)**2
+    g01 += beta*np.cos(phi)*np.sin(phi)
+    g10 += beta*np.cos(phi)*np.sin(phi)
+    g11 += beta*np.sin(phi)**2
+    g = np.array([[g00, g01], [g10, g11]])
+    g = g.transpose((2,3,0,1))
 
-    tf = TensorField(x, y, g)
+    tf = TensorField(x, y, g, logx = logscale, logy = logscale)
+    tf.writeto('test_tf.npz')
+    tf = TensorField.fromfile('test_tf.npz')
 
-    # Plot geodesic
-    def get_contour(x0, s0, Npoints = 64, **kwargs):
-        """Plot geodesic sphere.
+    if logscale: xinit = np.log10(xinit)
 
-        Arguments
-        ---------
-        x0 : (2) array
-            Central position
-        s0 : float
-            Geodesic distance
-        Npoints : integer (optional)
-            Number of points, default 64
-        """
-        t = np.linspace(0, s0, 30)
-        contour = []
-        for phi in np.linspace(0, 2*np.pi, Npoints+1):
-            g0 = tf(x0[0], x0[1])
-            v = np.array([np.cos(phi), np.sin(phi)])
-            norm = v.T.dot(g0).dot(v)**0.5
-            v /= norm
-            s = odeint(tf._func, [x0[0], x0[1], v[0], v[1]], t)
-            contour.append(s[-1])
-            #plt.plot(s[:,0], s[:,1], 'b', lw=0.1)
-        return np.array(contour)
-
-    contour = get_contour([3, 5], 1)
+    contour = tf.get_contour(xinit, 2)
+    if logscale: contour = 10**contour
     plt.plot(contour[:,0], contour[:,1], color = 'b', zorder=10)
-    contour = get_contour([3, 5], 2)
-    plt.plot(contour[:,0], contour[:,1], color = 'b', zorder=10)
-    
-    e1, e2, l1, l2 = tensor_to_vector(g)
 
-    vf = VectorField(x, y, e1, l2**-0.5)
-    lines = vf.get_streamlines([5,5], Nmax = 100)
+    vf1, vf2 = tf.get_VectorFields()
+
+    lines = vf1.get_streamlines(xinit, Nmax = 100)
     for line in lines:
+        if logscale: line = 10**line
         plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
 
-    vf = VectorField(x, y, e2, l1**-0.5)
-    lines = vf.get_streamlines([5,5], Nmax = 100)
+    lines = vf2.get_streamlines(xinit, Nmax = 100)
     for line in lines:
+        if logscale: line = 10**line
         plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
+
+    plt.xlim([-1,11])
+    plt.ylim([-1,11])
+    plt.savefig('test_tf.eps')
+    quit()
+
+#def test2():
+#    g = np.array([[2, 0.0], [0.0, 10]])
+#    print eigen(g)
+    #plt.quiver(vf1.x, vf1.y, vf1.v[:,:,0], vf1.v[:,:,1])
 
     #plt.scatter(sample[:,0], sample[:,1], marker='.')
 #    for i in range(20):
@@ -457,16 +520,6 @@ def test_tf():
     #   sample = tf.relax(sample, spring=True)
        #plt.scatter(sample[:,0], sample[:,1], marker='.', zorder=100)
 
-    plt.xlim([-2,12])
-    plt.ylim([-2,12])
-    plt.savefig('test_tf.eps')
-    quit()
-
-#def test2():
-#    g = np.array([[2, 0.0], [0.0, 10]])
-#    print eigen(g)
-
 if __name__ == "__main__":
-    #test_vf()
     test_tf()
-    #test()
+    test_vf()
