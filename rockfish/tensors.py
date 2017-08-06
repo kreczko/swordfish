@@ -9,62 +9,6 @@ import pylab as plt
 from matplotlib.patches import Ellipse
 from random import randint
 
-#def eigen(g):
-#    """Return major and minor eigenvector and eigenvalues.
-#
-#    Arguments
-#    ---------
-#    g : (2,2) array
-#
-#    Returns
-#    -------
-#    e1 : 1D-array (2)
-#        Eigenvector
-#    e2 : 1D-array (2)
-#        Eigenvector
-#    l1 : float
-#        Eigenvalue
-#    l2 : float
-#        Eigenvalue
-#    """
-#    # FIXME: Remove?
-#    w, v = np.linalg.eig(g)
-#    return v[:,0], v[:,1], w[0], w[1]
-#
-#def eigen(M):
-#    """Return major and minor eigenvector and eigenvalues.
-#
-#    Arguments
-#    ---------
-#    M : (2,2) array
-#
-#    Returns
-#    -------
-#    e1 : 1D-array (2)
-#        Eigenvector
-#    e2 : 1D-array (2)
-#        Eigenvector
-#    l1 : float
-#        Eigenvalue
-#    l2 : float
-#        Eigenvalue
-#    """
-#    trM = (M[0,0]+M[1,1])
-#    I = np.diag([1,1])
-#    D = M - 0.5*I*trM
-#    alpha = D[0,0]
-#    beta = D[0,1]
-#    e1 = np.array([beta, -alpha + np.sqrt(alpha**2+beta**2)])
-#    e2 = np.array([beta, -alpha - np.sqrt(alpha**2+beta**2)])
-#    l1 = 0.5*trM+np.sqrt(alpha**2+beta**2)
-#    l2 = 0.5*trM-np.sqrt(alpha**2+beta**2)
-#    e1 /= np.sqrt((e1*e1).sum())
-#    e2 /= np.sqrt((e2*e2).sum())
-#    # FIXME: Is this required?
-#    if e2[0] < 0:  # Define orientation
-#        e2 *= -1
-#    return e1, e2, l1, l2
-
 def tensor_to_vector(g):
     # Generate vector field
     _, _, N, M = np.shape(g)
@@ -102,13 +46,6 @@ def tensor_to_vector(g):
                 e2[i,j] *= -1
 
     return e1, e2, L1, L2
-
-    #plt.quiver(X, Y, e1[:,:,0], e1[:,:,1])
-    #plt.savefig('text.eps')
-
-
-#tensor_to_vector(g)
-#quit()
 
 class TensorField(object):
     """Object to generate tensor field."""
@@ -156,9 +93,6 @@ class TensorField(object):
         r[2] = -(G[0,0,0]*v[2]*v[2]+G[0,0,1]*v[2]*v[3]+G[0,1,0]*v[3]*v[2]+G[0,1,1]*v[3]*v[3])
         r[3] = -(G[1,0,0]*v[2]*v[2]+G[1,0,1]*v[2]*v[3]+G[1,1,0]*v[3]*v[2]+G[1,1,1]*v[3]*v[3])
 
-        # x' = v
-        # v' = -G(x) v v
-        # x' g x' = (ds/dt)^2
         return r
 
     def volume(self):
@@ -234,9 +168,6 @@ class TensorField(object):
             e = Ellipse(xy=x, width = 1/l_1**0.5, height = 1/l_2**0.5,
                  ec='0.1', fc = '0.5', angle = ang)
             plt.gca().add_patch(e)
-
-    def get_vector_field():
-        raise NotImplementedError()
 
 
 class VectorField(object):
@@ -506,8 +437,6 @@ def test_tf():
     plt.plot(contour[:,0], contour[:,1], color = 'b', zorder=10)
     
     e1, e2, l1, l2 = tensor_to_vector(g)
-
-    #plt.quiver(X, Y, e2[:,:,0], e2[:,:,1])
 
     vf = VectorField(x, y, e1, l2**-0.5)
     lines = vf.get_streamlines([5,5], Nmax = 100)
