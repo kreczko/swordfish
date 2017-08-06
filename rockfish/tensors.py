@@ -146,18 +146,15 @@ class TensorField(object):
         Christoffel_1st = self.Christoffel_1st(x, y)
         g = self.__call__(x, y)
         inv_g = np.linalg.inv(g)
-        return np.tensordot(g, Christoffel_1st, (1, 0))
-        return g.dot(Christoffel_1st)
+        return np.tensordot(inv_g, Christoffel_1st, (1, 0))
 
     def _func(self, v, t=0):
         r = np.zeros_like(v)
         G = self.Christoffel_2nd(v[0], v[1])
-        g = self.__call__(v[0], v[1])
-        norm = v[2:].T.dot(g).dot(v[2:])**0.5
-        r[0] = v[2]/norm
-        r[1] = v[3]/norm
-        r[2] = -(G[0,0,0]*v[2]*v[2]+G[0,0,1]*v[2]*v[3]+G[0,1,0]*v[3]*v[2]+G[0,1,1]*v[3]*v[3])/norm
-        r[3] = -(G[1,0,0]*v[2]*v[2]+G[1,0,1]*v[2]*v[3]+G[1,1,0]*v[3]*v[2]+G[1,1,1]*v[3]*v[3])/norm
+        r[0] = v[2]
+        r[1] = v[3]
+        r[2] = -(G[0,0,0]*v[2]*v[2]+G[0,0,1]*v[2]*v[3]+G[0,1,0]*v[3]*v[2]+G[0,1,1]*v[3]*v[3])
+        r[3] = -(G[1,0,0]*v[2]*v[2]+G[1,0,1]*v[2]*v[3]+G[1,1,0]*v[3]*v[2]+G[1,1,1]*v[3]*v[3])
 
         # x' = v
         # v' = -G(x) v v
@@ -455,10 +452,11 @@ def test_tf():
         g01 = np.zeros_like(X)
         g11 = np.ones_like(X)
         phi = (X-5)*0.3
-        g00 += 4.0*np.cos(phi)**2
-        g01 += 4.0*np.cos(phi)*np.sin(phi)
-        g10 += 4.0*np.cos(phi)*np.sin(phi)
-        g11 += 4.0*np.sin(phi)**2
+        beta = 10
+        g00 += beta*np.cos(phi)**2
+        g01 += beta*np.cos(phi)*np.sin(phi)
+        g10 += beta*np.cos(phi)*np.sin(phi)
+        g11 += beta*np.sin(phi)**2
         g = np.array([[g00, g01], [g10, g11]])
     elif metric_mode == '2':
         x = np.linspace(-5, 5, 40)
@@ -478,10 +476,34 @@ def test_tf():
     tf = TensorField(x, y, g)
 
     # Plot geodesic
-    t = np.linspace(0, 0.7, 100)
-    for phi in np.linspace(0, 2*np.pi, 65):
-        s = odeint(tf._func, [2, 8, np.sin(phi), np.cos(phi)], t)
-        plt.plot(s[:,0], s[:,1], 'b', lw=0.3)
+    def get_contour(x0, s0, Npoints = 64, **kwargs):
+        """Plot geodesic sphere.
+
+        Arguments
+        ---------
+        x0 : (2) array
+            Central position
+        s0 : float
+            Geodesic distance
+        Npoints : integer (optional)
+            Number of points, default 64
+        """
+        t = np.linspace(0, s0, 30)
+        contour = []
+        for phi in np.linspace(0, 2*np.pi, Npoints+1):
+            g0 = tf(x0[0], x0[1])
+            v = np.array([np.cos(phi), np.sin(phi)])
+            norm = v.T.dot(g0).dot(v)**0.5
+            v /= norm
+            s = odeint(tf._func, [x0[0], x0[1], v[0], v[1]], t)
+            contour.append(s[-1])
+            #plt.plot(s[:,0], s[:,1], 'b', lw=0.1)
+        return np.array(contour)
+
+    contour = get_contour([3, 5], 1)
+    plt.plot(contour[:,0], contour[:,1], color = 'b', zorder=10)
+    contour = get_contour([3, 5], 2)
+    plt.plot(contour[:,0], contour[:,1], color = 'b', zorder=10)
     
     e1, e2, l1, l2 = tensor_to_vector(g)
 
