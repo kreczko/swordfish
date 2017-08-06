@@ -1,1 +1,6 @@
 build/*
+*.eps
+*.pyc
+.*
+*.so
+.*
