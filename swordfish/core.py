@@ -38,7 +38,7 @@ def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
     """Create iminuit.Minuit object from input data.
 
     The intended use of this function is to allow an easy cross-check of the
-    Rockfish results (in absence of systematic uncertainties).
+    SwordFish results (in absence of systematic uncertainties).
 
     Arguments
     ---------
@@ -71,7 +71,7 @@ def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
     return M
 
 def func_to_templates(flux, x, dx = None):
-    """Return finite differences for use in Rockfish."""
+    """Return finite differences for use in SwordFish."""
     x = np.array(x)
     if dx is None:
         dx = x*0.01
@@ -86,12 +86,12 @@ def func_to_templates(flux, x, dx = None):
         fluxes.append(df)
     return fluxes
 
-class Rockfish(object):  # Everything is flux!
-    """Rockfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
+class Swordfish(object):  # Everything is flux!
+    """Swordfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
     """
     def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
             verbose = False, constraints = None, scale = 'auto'):
-        """Construct rockfish model from input.
+        """Construct swordfish model from input.
 
         Arguments
         ---------
@@ -276,8 +276,8 @@ class EffectiveCounts(object):
 
         Paramters
         ---------
-        model : Rockfish
-            Input Rockfish model.
+        model : Swordfish
+            Input Swordfish model.
 
         Note: The functionality applies *only* to additive component models.
         You have been warned.

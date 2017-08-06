@@ -54,7 +54,7 @@ def DD(m_DM, UL = True):
     # Covariance matrix for energy spectrum uncertainty (ad hoc)
     Sigma = get_sigma(E.means, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
 
-    # Set up the rockfish
+    # Set up the swordfish
     unc = 0.01 # 1% bkg uncertainty
     corr_length = 1  # 10 deg correlation length of bkg uncertainty
 

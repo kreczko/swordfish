@@ -37,7 +37,7 @@ def CTA_UL():
     # Covariance matrix for energy spectrum uncertainty (ad hoc)
     Sigma = get_sigma(Emed, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
 
-    # Set up rockfish
+    # Set up swordfish
     unc = 0.01  # 1% bkg uncertainty
     corr_length = 10  # 10 deg correlation length of bkg uncertainty
 

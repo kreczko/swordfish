@@ -56,12 +56,12 @@ def test_3d():
     Sigma = get_sigma(x, corr)
     cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = Sigma, nside = 16)
 
-    # Set up rockfish
+    # Set up swordfish
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*100.0
-    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
@@ -82,7 +82,7 @@ def test_UL():
     fluxes, noise, systematics, exposure = get_model_input(
             [sig], bg, [dict(err=bg*0.1, sigmas = [20.,], Sigma = None, nside =
                 16)], bg*100.)
-    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     I = m.fishermatrix()
     print I
@@ -128,12 +128,12 @@ def test_simple():
     cov = HARPix_Sigma(sig)
     cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = None, nside = 64)
 
-    # Set up rockfish
+    # Set up swordfish
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*10000.
-    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0, thetas = [0.000], psi = 1.)
     f = harp.HARPix.from_data(sig, F)
@@ -173,12 +173,12 @@ def test_MW_dSph():
     cov.add_systematics(err = bg*0.1, sigmas = [100], Sigma = None, nside =
             nside)
 
-    # Set up rockfish
+    # Set up swordfish
     fluxes = [sig.data.flatten()]
     noise = bg.get_formatted_like(sig).data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*1.
-    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
@@ -196,7 +196,7 @@ def test_spectra():
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
                 )).dot(np.diag(noise))
-    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
     f = m.effectiveinfoflux(0)
     plt.plot(np.sqrt(fluxes[0]**2/dx/noise))
     plt.plot(np.sqrt(f/dx), label='Info flux')
@@ -259,7 +259,7 @@ def test_matrix():
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
                 )).dot(np.diag(noise))
-    m = Rockfish(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
     I = m.fishermatrix()
     print I
     F = m.infoflux()
@@ -277,7 +277,7 @@ def test_infoflux():
     bkg = sig
 
     fluxes, noise, systematics, exposure = get_model_input([sig], bkg, None, 1.)
-    m = Rockfish(fluxes, noise, systematics, exposure)
+    m = Swordfish(fluxes, noise, systematics, exposure)
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F, div_sr = True)
     m = f.get_healpix(256)
@@ -299,13 +299,13 @@ def test_minuit():
     #plt.plot(templates[1])
     #plt.show()
     noise = flux(1.,0)
-    rf = Rockfish(templates, noise, None, exposure)
+    rf = Swordfish(templates, noise, None, exposure)
     sigma1 = 1./rf.effectivefishermatrix(0)**0.5
     sigma2 = 1./rf.effectivefishermatrix(1)**0.5
     print "Minos:", M.merrors[('x1',1.0)], M.merrors[('x2',1.0)]
     print "Minos:", M.merrors[('x1',-1.0)], M.merrors[('x2',-1.0)]
     print "Hesse:", M.errors['x1'], M.errors['x2']
-    print "Rockfish:", sigma1, sigma2
+    print "Swordfish:", sigma1, sigma2
     print "Events:", (exposure*flux(1,0)).sum()
 
     #print 1/rf.fishermatrix()[0,0]**0.5, 1/rf.fishermatrix()[1,1]**0.5
@@ -330,13 +330,13 @@ def test_minuit_contours():
     #plt.plot(templates[1])
     #plt.show()
     noise = flux(1.,0)
-    rf = Rockfish(templates, noise, None, exposure)
+    rf = Swordfish(templates, noise, None, exposure)
     sigma1 = 1./rf.effectivefishermatrix(0)**0.5
     sigma2 = 1./rf.effectivefishermatrix(1)**0.5
 #    print "Minos:", M.merrors[('x1',1.0)], M.merrors[('x2',1.0)]
 #    print "Minos:", M.merrors[('x1',-1.0)], M.merrors[('x2',-1.0)]
 #    print "Hesse:", M.errors['x1'], M.errors['x2']
-#    print "Rockfish:", sigma1, sigma2
+#    print "Swordfish:", sigma1, sigma2
 #    print "Events:", (exposure*flux(1,0)).sum()
 
     print 1/rf.fishermatrix()[0,0]**0.5, 1/rf.fishermatrix()[1,1]**0.5
