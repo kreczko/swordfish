@@ -16,14 +16,3 @@ setup(
     package_data={'rockfish': [] },
     long_description="""Really long.""",
 )
-
-setup(
-   name='HARPix',
-   version='0.1',
-   description='Hierarchical Adaptive Resolution Pixelizatio',
-   author='Christoph Weniger and Thomas Edwards',
-   author_mail='c.weniger@uva.nl',
-   packages=['HARPix'],
-   package_data={'HARPix': [] },
-   long_description="""Really long.""",
-)

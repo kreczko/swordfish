@@ -1,1 +1,1 @@
-from rockfish.core import Model
+from .core import *
