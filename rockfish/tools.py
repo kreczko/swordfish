@@ -136,7 +136,7 @@ class Logbins(object):
    def integrate(self, function):
        out = []
        for xmin, xmax in self.bins:
-           o = quad(function, xmin, xmax)[0]
+           o, oerr = quad(function, xmin, xmax)
            out.append(o)
        return np.array(out)
 

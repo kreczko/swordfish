@@ -188,7 +188,7 @@ def CTA_plot():
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
-    generate_dump(syst_flag = True)
+    #generate_dump(syst_flag = True)
     CTA_plot()
     #CTA(100, UL = True, syst_flag = True)
     #print CTA(100., UL = True, syst_flag = True, Tobs = .0001)

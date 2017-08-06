@@ -140,7 +140,7 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
     dmin_fun = lambda x, y: dmin_interp.ev(x, y)
 
     samples = sample(d_fun, sample_mask = sample_mask, extent = [xmin, xmax,
-        ymin, ymax], wmax = d.max(), N = 10000)
+        ymin, ymax], wmax = d.max(), N = 1000)
     tree = cKDTree(samples)
     #plt.scatter(samples[:,0], samples[:,1], marker='.', alpha='0.1')
     mask = np.ones(len(samples), dtype='bool')

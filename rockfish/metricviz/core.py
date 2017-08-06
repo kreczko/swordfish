@@ -1,6 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""MetricViz is a simple tool for the visualization of 2D metric tensors, using
+variable-density streamlines, equal geodesic distance contours and relaxed glyphs.
+
+The anticipated usecase for the tool is to visualize information geometry (see
+swordfish package).
+
+Author : Christoph Weniger <c.weniger@uva.nl>
+Date: 6 Aug 2017
+Version : 0.1
+"""
+
 from __future__ import division
 import numpy as np
 import scipy.interpolate as ip
@@ -421,105 +432,3 @@ class VectorField(object):
             xseed = self._seed(lines, boundaries = mask)
             if xseed is None: break
         return lines
-
-def test_vf():
-    """Test VectorField with mask."""
-    plt.figure(figsize=(4,4))
-
-    x = np.linspace(0, 10, 40)
-    y = np.linspace(0, 10, 41)
-    X, Y = np.meshgrid(x, y)
-
-    v0 = -np.ones_like(X)*1.0
-    v1 = np.sin(X/4)*2
-
-    v = np.array([v0, v1])
-    v = v.transpose((1,2,0))
-    d = np.sqrt(Y)*np.sqrt(X)*0.3+0.02
-
-    vo = np.array([v1, -v0])
-    vo = vo.transpose((1,2,0))
-    do = np.ones_like(X)*0.4
-
-    vf = VectorField(x, y, v, d)
-    mask = lambda x, y: ((x-5)**2+(y-5)**2)**0.5<5
-    lines = vf.get_streamlines([5,5], mask = mask)
-    for line in lines:
-        plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-
-    vf = VectorField(x, y, vo, do)
-    lines = vf.get_streamlines([5,5], mask = mask)
-    for line in lines:
-        plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-
-    plt.xlim([-2,12])
-    plt.ylim([-2,12])
-    plt.savefig('test_vf.eps')
-
-def test_tf(logscale = False, xinit = [3,3]):
-    """Test TensorField and VectorField."""
-    plt.figure(figsize=(4,4))
-
-    xinit = np.array(xinit)
-
-    # Generate test-metric
-    x = np.linspace(.1, 10, 20)
-    y = np.linspace(.1, 10, 20)
-    X, Y = np.meshgrid(x, y)
-    g00 = np.ones_like(X)
-    g10 = np.zeros_like(X)
-    g01 = np.zeros_like(X)
-    g11 = np.ones_like(X)
-    phi = (X-5)*0.3
-    beta = 10
-    g00 += beta*np.cos(phi)**2
-    g01 += beta*np.cos(phi)*np.sin(phi)
-    g10 += beta*np.cos(phi)*np.sin(phi)
-    g11 += beta*np.sin(phi)**2
-    g = np.array([[g00, g01], [g10, g11]])
-    g = g.transpose((2,3,0,1))
-
-    tf = TensorField(x, y, g, logx = logscale, logy = logscale)
-    tf.writeto('test_tf.npz')
-    tf = TensorField.fromfile('test_tf.npz')
-
-    if logscale: xinit = np.log10(xinit)
-
-    contour = tf.get_contour(xinit, 2)
-    if logscale: contour = 10**contour
-    plt.plot(contour[:,0], contour[:,1], color = 'b', zorder=10)
-
-    vf1, vf2 = tf.get_VectorFields()
-
-    lines = vf1.get_streamlines(xinit, Nmax = 100)
-    for line in lines:
-        if logscale: line = 10**line
-        plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-
-    lines = vf2.get_streamlines(xinit, Nmax = 100)
-    for line in lines:
-        if logscale: line = 10**line
-        plt.plot(line.T[0], line.T[1], color='0.5', lw=0.5)
-
-    plt.xlim([-1,11])
-    plt.ylim([-1,11])
-    plt.savefig('test_tf.eps')
-    quit()
-
-#def test2():
-#    g = np.array([[2, 0.0], [0.0, 10]])
-#    print eigen(g)
-    #plt.quiver(vf1.x, vf1.y, vf1.v[:,:,0], vf1.v[:,:,1])
-
-    #plt.scatter(sample[:,0], sample[:,1], marker='.')
-#    for i in range(20):
-#        print i
-#        sample = tf.relax(sample, spring=False)
-    #for i in range(1000):
-    #   print i
-    #   sample = tf.relax(sample, spring=True)
-       #plt.scatter(sample[:,0], sample[:,1], marker='.', zorder=100)
-
-if __name__ == "__main__":
-    test_tf()
-    test_vf()
