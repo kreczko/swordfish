@@ -72,7 +72,7 @@ def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
 
 def func_to_templates(flux, x, dx = None):
     """Return finite differences for use in SwordFish."""
-    x = np.array(x)
+    x = np.array(x, dtype='float64')
     if dx is None:
         dx = x*0.01
     fluxes = []

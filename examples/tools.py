@@ -4,17 +4,17 @@
 from __future__ import division
 import healpy as hp
 import numpy as np
-import HARPix as harp
+import harpix as harp
 from scipy.sparse import linalg as la
-from core import *
+import swordfish as sf
 from scipy.integrate import quad
 
-class HARPix_Sigma(la.LinearOperator):
+class harpix_Sigma(la.LinearOperator):
     """docstring for CovarianceMatrix"""
     def __init__(self, harpix):
         self.harpix = harpix
         self.N = np.prod(np.shape(self.harpix.data))
-        super(HARPix_Sigma, self).__init__(None, (self.N, self.N))
+        super(harpix_Sigma, self).__init__(None, (self.N, self.N))
         self.Flist = []
         self.Xlist = []
 
@@ -89,7 +89,7 @@ def get_model_input(signals, noise, systematics, exposure):
     # Everything is intensity
     S = [sig.get_formatted_like(signals[0]).get_data(mul_sr=True).flatten() for sig in signals]
     N = noise.get_formatted_like(signals[0]).get_data(mul_sr=True).flatten()
-    SYS = HARPix_Sigma(signals[0])
+    SYS = harpix_Sigma(signals[0])
     if systematics is None:
         SYS = None
     else:
