@@ -342,9 +342,9 @@ def test():
 
     m = h.get_heaplpix(1024)
     hp.mollview(np.log10(m), nest = True, cmap='gnuplot')
-    plt.show()
+    # plt.show()
     # plt.savefig('test.eps')
-    quit()
+    # quit()
 
     npix = hp.nside2npix(8)
     m = np.random.random((npix, 2,3))
@@ -358,8 +358,7 @@ def test():
     for i in range(10):
         lonlat = (40*i, 10*i)
         h0 = HARPix(dims=(10,))
-        h0.add_peak(lonlat, .01, 10)
-        print np.shape(h0.data)
+        h0.add_singularity(lonlat, .01, 10)
         x = np.linspace(1, 10, 10)
         h0.add_func(lambda dist: x/(dist+0.01), mode = 'dist', center = lonlat)
         h += h0

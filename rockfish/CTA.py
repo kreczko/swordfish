@@ -153,8 +153,8 @@ def CTA(m_DM, UL = True):
         return F
 
 def UL_plot():
-    mlist = np.logspace(1, 3, 10)
-    svlist = np.logspace(-26, -24, 10)
+    mlist = np.logspace(1, 3, 50)
+    svlist = np.logspace(-26, -24, 50)
     sv0 = 1e-26
     ULlist = []
     G = np.zeros((len(mlist), len(svlist),2,2))
@@ -191,11 +191,12 @@ def UL_plot():
             #    = I_sv * sv**2 * (dlog10x/dlogx)**-2
             #    = I_sv * sv**2 * log10(e)**-2
 
-    visual.fisherplot(np.log10(mlist), np.log10(svlist), G, xlog=True, ylog=True)
+    visual.fisherplot(np.log10(mlist), np.log10(svlist), G, streamlines=True, xlog=True, ylog=True)
     plt.xlim([10, 1000])
     plt.ylim([1e-26, 1e-24])
     plt.loglog(mlist, ULlist)
-    plt.savefig('test.eps')
+    plt.show()
+    # plt.savefig('test.eps')
 
 if __name__ == "__main__":
     UL_plot()
