@@ -22,6 +22,8 @@ def eigen(M):
     lambda_2 = 0.5*trM-np.sqrt(alpha**2+beta**2)
     e_1 /= np.sqrt((e_1*e_1).sum())
     e_2 /= np.sqrt((e_2*e_2).sum())
+    if e_2[0] < 0:  # Define orientation
+        e_2 *= -1
     return e_1, e_2, lambda_1, lambda_2
 
 def generate_maps(x, y, G):
@@ -68,11 +70,12 @@ def sample(P, sample_mask = None, extent = None, wmax = 1, N = 100):
     X = np.array([])
     Y = np.array([])
     xmin, xmax, ymin, ymax = extent
+    P0 = lambda x, y: P(x,y)*0.9 + 0.1*wmax
     while True:
         w = np.random.random(N/2)*wmax
         x = np.random.uniform(xmin, xmax, N/2)
         y = np.random.uniform(ymin, ymax, N/2)
-        accepted = P(x,y) > w
+        accepted = P0(x,y) > w
         if sample_mask:
             accepted = accepted & sample_mask(x, y)
         X = np.append(X, x[accepted])
@@ -104,7 +107,7 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
     xmin, xmax, ymin, ymax = X.min(), X.max(), Y.min(), Y.max()
 
     # Get metric
-    l1, vx1, vy1, l2, vx2, vy2 = generate_maps(X, Y, G)
+    l1, vx1, vy1, l2, vx2, vy2 = generate_maps(X, Y, G)  # l1 > l2
     x2dim, y2dim = np.meshgrid(X, Y)
     d = np.sqrt(l1*l2)  # Density (Jeffreys' prior), sqrt(det(I))
     dmax = 1.3/np.sqrt(l2)  # Larger distance correspondingt to smaller eigenvalue
@@ -198,7 +201,7 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
                     streamline[:,1] = 10**streamline[:,1]
                 #plt.plot(streamline[:,0], streamline[:,1], ls='-', color='r',
                 x = np.linspace(0, 1, 10)
-                lwidths=np.cos(np.pi*x/2)*2
+                lwidths= np.cos(np.pi*x/2)*1+0.5
                 points = streamline.reshape(-1, 1, 2)
                 segments = np.concatenate([points[:-1], points[1:]], axis=1)
                 lc = LineCollection(segments, linewidths=lwidths, color=c)
@@ -209,6 +212,27 @@ def fisherplot(X, Y, G, streamlines = True, voronoi = False, ellipses = False,
     if ylog:
         plt.gca().set_yscale('log')
 
+def loglog_from_npz(filename):
+    data = np.load(filename)
+    y_UL = data['y_UL']
+    x = data['x']
+    y = data['y']
+    G = data['G']
+    # ln derivatives
+    for i in range(len(x)):
+        for j in range(len(y)):
+            G[i,j,0,0] *= y[j]**2
+            G[i,j,1,1] *= x[i]**2
+            G[i,j,0,1] *= x[i]*y[j]
+            G[i,j,1,0] *= x[i]*y[j]
+    # log10 derivatives
+    G /= np.log10(np.e)**2
+    Gp = G*1.0
+    # Flip order
+    Gp[:,:,1,1] = G[:,:,0,0]
+    Gp[:,:,0,0] = G[:,:,1,1]
+    plt.loglog(x, y_UL)
+    fisherplot(np.log10(x), np.log10(y), Gp, xlog=True, ylog=True)
 
 def test():
     x = np.linspace(0, 2, 10)
@@ -217,11 +241,8 @@ def test():
     g = np.array([[2., .1], [0.1, 1.]])
     G[:,:,:,:] = g
     G = (G.T*10**x).T
-
     sample_mask = lambda x, y: x < 2
-
     fisherplot(x, y, G, xlog = True, ylog = True, sample_mask = sample_mask)
-
     plt.savefig('ellipses.pdf')
 
 if __name__ == "__main__":

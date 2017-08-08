@@ -56,12 +56,12 @@ def test_3d():
     Sigma = get_sigma(x, corr)
     cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = Sigma, nside = 16)
 
-    # Set up rockfish
+    # Set up swordfish
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*100.0
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
@@ -82,7 +82,7 @@ def test_UL():
     fluxes, noise, systematics, exposure = get_model_input(
             [sig], bg, [dict(err=bg*0.1, sigmas = [20.,], Sigma = None, nside =
                 16)], bg*100.)
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     I = m.fishermatrix()
     print I
@@ -128,12 +128,12 @@ def test_simple():
     cov = HARPix_Sigma(sig)
     cov.add_systematics(err = bg*0.1, sigmas = [20.,], Sigma = None, nside = 64)
 
-    # Set up rockfish
+    # Set up swordfish
     fluxes = [sig.data.flatten()]
     noise = bg.data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*10000.
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0, thetas = [0.000], psi = 1.)
     f = harp.HARPix.from_data(sig, F)
@@ -173,12 +173,12 @@ def test_MW_dSph():
     cov.add_systematics(err = bg*0.1, sigmas = [100], Sigma = None, nside =
             nside)
 
-    # Set up rockfish
+    # Set up swordfish
     fluxes = [sig.data.flatten()]
     noise = bg.get_formatted_like(sig).data.flatten()
     systematics = cov
     exposure = np.ones_like(noise)*1.
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
 
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
@@ -196,7 +196,7 @@ def test_spectra():
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
                 )).dot(np.diag(noise))
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
     f = m.effectiveinfoflux(0)
     plt.plot(np.sqrt(fluxes[0]**2/dx/noise))
     plt.plot(np.sqrt(f/dx), label='Info flux')
@@ -259,7 +259,7 @@ def test_matrix():
             np.diag(noise).dot(
                 np.exp(-(X-Y)**2/2/40**2) + np.exp(-(X-Y)**2/2/20**2)
                 )).dot(np.diag(noise))
-    m = Model(fluxes, noise, systematics, exposure, solver='cg')
+    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
     I = m.fishermatrix()
     print I
     F = m.infoflux()
@@ -277,12 +277,88 @@ def test_infoflux():
     bkg = sig
 
     fluxes, noise, systematics, exposure = get_model_input([sig], bkg, None, 1.)
-    m = Model(fluxes, noise, systematics, exposure)
+    m = Swordfish(fluxes, noise, systematics, exposure)
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F, div_sr = True)
     m = f.get_healpix(256)
     hp.mollview(m, nest = True)
     plt.savefig('test.eps')
+
+def test_minuit():
+
+    X = np.linspace(-5, 5, 100)
+
+    flux = lambda x, y: np.ones_like(X)*1 + x*np.exp(-(X-y)**2/2)
+    noise = flux(1., 0.)*0
+    exposure = np.ones_like(X)*0.1
+    M = get_minuit(flux, noise, exposure, [1., 0.], [0.01, 0.01], print_level = 1)
+    M.migrad()
+    M.minos()
+    templates = func_to_templates(flux, [1., 0.], [0.0001, 0.0001])
+    #plt.plot(templates[0])
+    #plt.plot(templates[1])
+    #plt.show()
+    noise = flux(1.,0)
+    rf = Swordfish(templates, noise, None, exposure)
+    sigma1 = 1./rf.effectivefishermatrix(0)**0.5
+    sigma2 = 1./rf.effectivefishermatrix(1)**0.5
+    print "Minos:", M.merrors[('x1',1.0)], M.merrors[('x2',1.0)]
+    print "Minos:", M.merrors[('x1',-1.0)], M.merrors[('x2',-1.0)]
+    print "Hesse:", M.errors['x1'], M.errors['x2']
+    print "Swordfish:", sigma1, sigma2
+    print "Events:", (exposure*flux(1,0)).sum()
+
+    #print 1/rf.fishermatrix()[0,0]**0.5, 1/rf.fishermatrix()[1,1]**0.5
+    #x, y, v = M.contour("x1", "x2")
+    #import pylab as plt
+    #plt.contour(x, y, v)
+    #plt.show()
+
+
+def test_minuit_contours():
+
+    X = np.linspace(-5, 5, 100)
+
+    flux = lambda x, y:  np.ones_like(X)*1 + x*np.exp(-(X-y)**2/2)
+    noise = flux(1., 0.)*0
+    exposure = np.ones_like(X)*1.0
+    M = get_minuit(flux, noise, exposure, [1., 0.], [0.01, 0.01], print_level = 1)
+    M.migrad()
+    M.minos()
+    templates = func_to_templates(flux, [1., 0.], [0.0001, 0.0001])
+    #plt.plot(templates[0])
+    #plt.plot(templates[1])
+    #plt.show()
+    noise = flux(1.,0)
+    rf = Swordfish(templates, noise, None, exposure)
+    sigma1 = 1./rf.effectivefishermatrix(0)**0.5
+    sigma2 = 1./rf.effectivefishermatrix(1)**0.5
+#    print "Minos:", M.merrors[('x1',1.0)], M.merrors[('x2',1.0)]
+#    print "Minos:", M.merrors[('x1',-1.0)], M.merrors[('x2',-1.0)]
+#    print "Hesse:", M.errors['x1'], M.errors['x2']
+#    print "Swordfish:", sigma1, sigma2
+#    print "Events:", (exposure*flux(1,0)).sum()
+
+    print 1/rf.fishermatrix()[0,0]**0.5, 1/rf.fishermatrix()[1,1]**0.5
+    x, y, v = M.contour("x1", "x2", bound=4)
+    import pylab as plt
+    plt.contour(x, y, v, [1,4,9])
+    plt.xlim([0, 2])
+    plt.ylim([-1, 1])
+    plt.savefig('test.eps')
+
+
+def test_convolution():
+    E = Logbins(1, 3, 100)
+    K = Convolution1D(E, 0.1)
+    mu = np.zeros(100)+0.1
+    mu[50] = 1
+    mu[30] = 1
+    mu[70] = 1
+    plt.semilogx(E.means, K(mu))
+    print K(mu).sum()
+    plt.show()
+    quit()
 
 
 if __name__ == "__main__":
@@ -293,4 +369,9 @@ if __name__ == "__main__":
     #test_UL()
     #smoothtest()
     #test_spectra()
+    #test_matrix()
+    #test_infoflux()
+    #test_minuit()
+    test_minuit_contours()
+    #test_convolution()
     # test_matrix()

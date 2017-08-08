@@ -5,7 +5,7 @@ from __future__ import division
 import healpy as hp
 import numpy as np
 import scipy.sparse.linalg as la
-import rockfish as rf
+import swordfish as rf
 import pylab as plt
 
 def main():

@@ -136,9 +136,46 @@ class Logbins(object):
    def integrate(self, function):
        out = []
        for xmin, xmax in self.bins:
-           o = quad(function, xmin, xmax)[0]
+           o, oerr = quad(function, xmin, xmax)
            out.append(o)
        return np.array(out)
+
+class Convolution1D(object):
+    """General 1-D covolution object."""
+    def __init__(self, bins, sigma):
+        """Create Convolution1D object, assuming Gaussian kernal.
+
+        Arguments
+        ---------
+        bins : Logbin or Linbin object
+        sigma: {float, function}
+            Relative 1-sigma width.
+        """
+        self.bins = bins
+        if isinstance(sigma, float):
+            self.sigma = lambda x: np.ones_like(x)*sigma
+        else:
+            self.sigma = sigma
+        self.K = self._create_response_matrix()
+
+    @staticmethod
+    def _lognormal_kernal(x, x_c, sigma):
+        """Log-normal distrbution, centered on log(x_c), width sigma."""
+        return 1/np.sqrt(2*np.pi)/x/sigma*np.exp(-0.5*(np.log(x/x_c))**2/sigma**2)
+
+    # FIXME:  Improve treatment at boundaries
+    def _create_response_matrix(self):
+        K = []
+        for x0 in self.bins.means:
+            s0 = self.sigma(x0)
+            kernal = lambda x: self._lognormal_kernal(x, x0, s0)
+            k = self.bins.integrate(kernal)
+            K.append(k)
+        K = np.array(K)
+        return K
+
+    def __call__(self, mu):
+        return self.K.dot(mu)
 
 
 

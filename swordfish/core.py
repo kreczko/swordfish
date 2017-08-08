@@ -5,13 +5,93 @@ from __future__ import division
 import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
+import copy
 
-class Model(object):  # Everything is flux!
-    """Model(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
+
+def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
+    """Initialize minuit using non-nonsense interface."""
+    import iminuit
+    N = len(x)
+    if x_err is not None:
+        assert len(x_err) == N
+    if x_lim is not None:
+        assert len(x_lim) == N
+    if x_fix is not None:
+        assert len(x_fix) == N
+    varnames = ["x"+str(i) for i in range(1,N+1)]
+    def wf(*args):
+        x = np.array(args)
+        return f(x)
+    for i, var in enumerate(varnames):
+        kwargs[var] = x[i]
+        if x_lim is not None:
+            kwargs["limit_"+var] = x_lim[i]
+        if x_err is not None:
+            kwargs["error_"+var] = x_err[i]
+        if x_fix is not None:
+            kwargs["fix_"+var] = x_fix[i]
+    return iminuit.Minuit(wf, forced_parameters = varnames, errordef =
+            errordef, **kwargs)
+
+
+def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
+    """Create iminuit.Minuit object from input data.
+
+    The intended use of this function is to allow an easy cross-check of the
+    SwordFish results (in absence of systematic uncertainties).
+
+    Arguments
+    ---------
+    flux : function of model parameters, returns 1-D array
+        Flux.
+    noise : 1-D array
+        Noise.
+    exposure : {float, 1-D array}
+        Exposure.
+    thetas0: 1-D array
+        Initial values, define mock data.
+    thetas0_err: 1-D array
+        Initial errors.
+    **kwargs: additional arguments
+        Passed on to iminuit.Minuit.
+
+    Note
+    ----
+        The (expected) counts in the Poisson likelikhood are given by
+
+            mu(thetas) = exposure*(flux(thetas)+noise) .
+    """
+    def chi2(thetas):
+        mu = (flux(*thetas) + noise)*exposure
+        mu0 = (flux(*thetas0) + noise)*exposure
+        lnL = -(mu*np.log(mu/mu0)-mu+mu0)
+        return -lnL.sum()*2
+
+    M = _init_minuit(chi2, x = thetas0, x_err = thetas0_err, **kwargs)
+    return M
+
+def func_to_templates(flux, x, dx = None):
+    """Return finite differences for use in SwordFish."""
+    x = np.array(x)
+    if dx is None:
+        dx = x*0.01
+    fluxes = []
+    #fluxes.append(flux(*x))
+    for i in range(len(x)):
+        xU = copy.copy(x)
+        xL = copy.copy(x)
+        xU[i] += dx[i]
+        xL[i] -= dx[i]
+        df = (flux(*xU) - flux(*xL))/2./dx[i]
+        fluxes.append(df)
+    return fluxes
+
+class Swordfish(object):  # Everything is flux!
+    """Swordfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
     """
     def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
-            verbose = False):
-        """Construct rockfish model from model input.
+            verbose = False, constraints = None, scale = 'auto'):
+        """Construct swordfish model from input.
 
         Arguments
         ---------
@@ -21,12 +101,15 @@ class Model(object):  # Everything is flux!
         exposure : {float, 1-D array}
         solver : {'direct', 'cg'}, optional
         verbose : bool, optional
+        constraints : 1-D array, optional
+        scale : {1-D array, 'auto'}
         """
         self.flux = flux
         self.noise = noise
         self.exposure = exposure
         self.cache = None
         self.verbose = verbose
+        self.scale = self._get_auto_scale() if scale == 'auto' else scale
 
         self.solver = solver
         self.nbins = len(self.noise)  # Number of bins
@@ -36,6 +119,42 @@ class Model(object):  # Everything is flux!
         else:
             self.systematics = la.LinearOperator(
                     (self.nbins, self.nbins), matvec = lambda x: x*0.)
+
+        self.set_constraints(constraints)  # sets self.errors and self.fixed
+
+    def _get_auto_scale(self):
+        print "WARNING: Scaling not completely implemented yet."
+        return np.array([
+            1/(f*self.exposure).max() for f in self.flux
+            ])
+
+    def set_constraints(self, constraints):
+        """Set Gaussian constraints on flux components.
+
+        List of constraints will be interpreted as 1-sigma errors.  Special
+        list item values:
+        - Zero means that the component is fixed.
+        - None or inf means that the component is unconstrained.
+
+        Note: constrains = None means that no constrants are applies.
+
+        Arguments
+        ---------
+        constraints : {None, list, 1-D array}
+        """
+        print "WARNING: Constraints not completely implemented yet."
+        assert constraints is None or len(constraints) == self.ncomp
+        if constraints is not None:
+            errors = np.array([
+                    np.inf if x is None or x == np.inf else x for x in constraints
+                    ])
+            fixed = np.array([x == 0. for x in constraints])
+            self.errors = errors
+            self.fixed = fixed
+        else:
+            self.errors = np.ones(self.ncomp)*np.inf
+            self.fixed = np.zeros(self.ncomp, dtype='bool')
+        return self
 
     def _solveD(self, thetas = None, psi = 1.):
         noise = self.noise*1.  # Make copy
@@ -60,8 +179,6 @@ class Model(object):  # Everything is flux!
                     print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
                 x0 = self.flux[i]/noise if self.cache is None else self.cache/exposure
-                #print np.shape(D)
-                #D = D(np.eye(self.nbins))
                 x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-5)[0]
                 x[i] *= exposure
                 self.cache= x[i]
@@ -152,13 +269,55 @@ class Model(object):  # Everything is flux!
         return eff_F
 
 class EffectiveCounts(object):
+    """EffectiveCounts(model).
+    """
     def __init__(self, model):
+        """Construct EffectiveCounts object.
+
+        Paramters
+        ---------
+        model : Swordfish
+            Input Swordfish model.
+
+        Note: The functionality applies *only* to additive component models.
+        You have been warned.
+        """
         self.model = model
 
     def counts(self, i, theta):
+        """Return total counts.
+
+        Parameters
+        ----------
+        i : integer
+            Component of interest.
+        theta : float
+            Normalization of component i.
+
+        Returns
+        -------
+        lambda : float
+            Number of counts in component i.
+        """
         return sum(self.model.flux[i]*self.model.exposure*theta)
 
     def effectivecounts(self, i, theta, psi = 1.):
+        """Return effective counts.
+
+        Parameters
+        ----------
+        i : integer
+            Component of interest.
+        theta : float
+            Normalization of component i.
+
+        Returns
+        -------
+        s : float
+            Effective signal counts.
+        b : float
+            Effective backgroundc counts.
+        """
         I0 = self.model.effectivefishermatrix(i, psi = psi)
         thetas = np.zeros(self.model.ncomp)
         thetas[i] = theta
@@ -170,6 +329,22 @@ class EffectiveCounts(object):
         return s, b
 
     def upperlimit(self, alpha, i, psi = 1., gaussian = False):
+        """Returns upper limits, based on effective counts method.
+
+        Parameters
+        ----------
+        alpha : float
+            Statistical significance (e.g., 95% CL is 0.05).
+        i : integer
+            Component of interest.
+        gaussian : bool, optional
+            Force gaussian errors.
+
+        Returns
+        -------
+        thetaUL : float
+            Predicted upper limit on component i.
+        """
         Z = 2.64  # FIXME
         I0 = self.model.effectivefishermatrix(i, psi = psi)
         if gaussian:
