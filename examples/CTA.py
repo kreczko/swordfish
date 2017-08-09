@@ -13,6 +13,7 @@ from scipy.integrate import quad
 from math import cos, sin
 from PPPC4DMID import interp
 import metricplot as mp
+import DSspectra
 
 #################
 # DM distribution
@@ -23,7 +24,8 @@ def get_los():
     MW_D = 8.5 # kpc
     MW_rs = 20 # kpc
     alpha = 0.17
-    MW_rhoS = 0.081351425781930664 # GeV cm^-3
+    MW_rhoS = 1.5*0.081351425781930664 # GeV cm^-3
+    # Local density is 0.3 GeV/cm3 in this case
     kpc_cm = 3.086e21 # conversion factor
     def Lum_los(d, l, b):
         """Returns density squared for given galactic coordinates l and b at 
@@ -45,14 +47,14 @@ def get_los():
     l = np.logspace(-3,np.log10(180),num=50)
     los = np.zeros(len(l))
     for i in range(len(l)):
-        los[i] = quad(Lum_los,0.,100.,args=(l[i],0.0))[0]*kpc_cm
+        los[i] = quad(Lum_los,0.,30.,args=(l[i],0.0))[0]*kpc_cm
     Interp_sig = interp1d(l,los)
     return Interp_sig
 
 def get_Jmap():
    Interp_sig = get_los()
    #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
-   Jmap = harp.HARPix().add_disc((0,0), 3, 64)
+   Jmap = harp.HARPix().add_disc((0,0), 5, 32)
    Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
    return Jmap
 
@@ -64,7 +66,7 @@ def get_Jmap():
 def dNdE_e(E):
      # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
      E0 = 1e3
-     return 1.17e-11*np.where(E > 1., (E/E0)**-3.9, (E/E0)**-3.0)
+     return 1.17e-11*np.where(E > 1e3, (E/E0)**-3.9, (E/E0)**-3.0)
 
 # Cosmic ray protons
 def dNdE_p(E):
@@ -86,12 +88,10 @@ def get_instr_bkg(E):
 def get_exposure(E, Tobs):
     # Effective area taken from https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
     Et, EffA = np.loadtxt("../data/CTA_effective_A.txt", unpack=True)
-    EffectiveA_m2 = interp1d(Et,EffA, fill_value="extrapolate")(E.means)
-    EffectiveA_cm2 = EffectiveA_m2*(100**2.) # Conversion to cm^2/50hr
-    EffectiveA_cm2 = EffectiveA_cm2/50./60./60. # Conversion to cm^2/s
-    EffectiveA_cm2 *= 0
-    EffectiveA_cm2 += 1e10  # FIXME
-    obsT = Tobs*60.*60. # 100 hours of observation in s
+    Et *= 1e3  # TeV --> GeV
+    EffA *= 1e4  # m2 --> cm2
+    EffectiveA_cm2 = interp1d(Et, EffA, fill_value="extrapolate")(E.means)
+    obsT = Tobs*3600 # 100 hours of observation in s
     expotab = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
     return harp.HARPix().add_iso(1, fill = 1.).expand(expotab)
 
@@ -100,9 +100,12 @@ def get_exposure(E, Tobs):
 # DM model
 ##########
 
+
 def get_sig_spec(sv, m, E, ch='bb'):
-    spec_DM = interp.Interp(ch=ch)
-    return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
+    #spec_DM = interp.Interp(ch=ch)
+    #return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
+    s = DSspectra.spec(channel='bb', mass = m, type='gam')
+    return E.integrate(lambda x: sv/8/np.pi/m**2*s(x))
 
 
 #######################
@@ -112,8 +115,8 @@ def get_sig_spec(sv, m, E, ch='bb'):
 
 def CTA(m_DM, UL = True, syst_flag = True, Tobs = 100.):
     # Parameters
-    E = Logbins(0.5, 4.5, 11)   # GeV
-    unc = 0.1 # 1% bkg uncertainty
+    E = Logbins(1.0, 4.0, 50)   # GeV 10 GeV - 10 TeV
+    unc = 0.01 # 1% bkg uncertainty
     corr_length = 1  # 10 deg correlation length of bkg uncertainty
     Sigma = get_sigma(E.means, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
     sv0 = 1e-26
@@ -122,14 +125,20 @@ def CTA(m_DM, UL = True, syst_flag = True, Tobs = 100.):
     J = get_Jmap()
 
     # Define signal spectrum
-    t = sf.func_to_templates(lambda x, y: get_sig_spec(x*sv0, y, E), [1., m_DM])
+    t = sf.func_to_templates(lambda x, y: get_sig_spec(x*sv0, y, E), [1.,
+       m_DM], dx = [.01,m_DM*0.01])
 
     # Get signal maps
     S = J.expand(t[0])
     dS = J.expand(t[1])
 
     # Get background (instr.)
-    B = get_instr_bkg(E)
+    B = get_instr_bkg(E)  # FIXME?
+
+#    plt.loglog(E.means, B.get_integral()/4./np.pi)
+#    plt.loglog(E.means, S.get_integral()/4./np.pi)
+#    plt.show()
+#    quit()
 
     # Get exposure
     expo = get_exposure(E, Tobs)
@@ -159,13 +168,14 @@ def CTA(m_DM, UL = True, syst_flag = True, Tobs = 100.):
         return F
 
 def generate_dump(syst_flag = True):
-    mlist = np.logspace(1.3, 2.7, 30)
-    svlist = np.logspace(-29, -27, 31)
+    mlist = np.logspace(1.5, 4.0, 10)
+    svlist = np.logspace(-27, -24, 31)
     ULlist = []
     G = np.zeros((len(svlist), len(mlist),2,2))
     for i, m in enumerate(mlist):
-        print m
         UL = CTA(m, UL = True, syst_flag = syst_flag)
+        print "Mass [GeV]", m
+        print "Upper limit [cm3/s]:", UL
         ULlist.append(UL)
         sv0 = 1e-26
         F0 = CTA(m, UL = False, syst_flag = syst_flag)  # dtheta, dm, sv0 = 1e-26
@@ -189,23 +199,23 @@ def CTA_plot():
     #plt.savefig('test.eps')
     #quit()
     vf1, vf2 = tf.get_VectorFields()
-    mask = lambda x, y: y < np.log10(2e-28)
-    lines = vf1.get_streamlines([2, -28.8], Nmax=100, mask = mask, Nsteps = 50)
+    mask = lambda x, y: y < np.log10(3e-26)
+    lines = vf1.get_streamlines([2, -26.0], Nmax=100, mask = mask, Nsteps = 100)
     for line in lines:
        line = 10**line
        plt.plot(line.T[0], line.T[1], color='0.5')
-    lines = vf2.get_streamlines([2, -28.5], Nmax=100, mask = mask, Nsteps = 50)
+    lines = vf2.get_streamlines([2, -26.0], Nmax=100, mask = mask, Nsteps = 100)
     for line in lines:
        line = 10**line
-       plt.plot(line.T[0], line.T[1], '0.5')
+       plt.plot(line.T[0], line.T[1], color='0.5')
 
-    #contour = 10**tf.get_contour([2, -28.5], 1, Npoints = 300)
-    #plt.plot(contour.T[0], contour.T[1], 'b')
-    #contour = 10**tf.get_contour([2, -28.5], 2, Npoints = 300)
-    #plt.plot(contour.T[0], contour.T[1], 'b--')
-    contour = 10**tf.get_contour([2, -28.1], 1, Npoints = 300)
+    contour = 10**tf.get_contour([3, -26.0], 1, Npoints = 300)
     plt.plot(contour.T[0], contour.T[1], 'b')
-    contour = 10**tf.get_contour([2, -28.1], 2, Npoints = 300)
+    contour = 10**tf.get_contour([3, -26.0], 2, Npoints = 300)
+    plt.plot(contour.T[0], contour.T[1], 'b--')
+    contour = 10**tf.get_contour([2, -26.0], 1, Npoints = 300)
+    plt.plot(contour.T[0], contour.T[1], 'b')
+    contour = 10**tf.get_contour([2, -26.0], 2, Npoints = 300)
     plt.plot(contour.T[0], contour.T[1], 'b--')
 
     x = np.load('dump2.npz')['x']
@@ -217,7 +227,7 @@ def CTA_plot():
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
-    #generate_dump(syst_flag = False)
+    generate_dump(syst_flag = False)
     CTA_plot()
     #CTA(100, UL = True, syst_flag = True)
     #print CTA(100., UL = True, syst_flag = True, Tobs = .0001)
