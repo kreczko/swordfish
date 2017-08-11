@@ -53,10 +53,15 @@ class harpix_Sigma(la.LinearOperator):
             vec = self.harpix.get_vec()
             N = len(self.harpix.data)
             M = np.zeros((N, N))
+            #corr = 2.**(self.harpix.order-2)
             sigma2 = np.deg2rad(sigma)**2
             for i in range(N):
                 dist = hp.rotator.angdist(vec[:,i], vec)
                 M[i] = np.exp(-dist**2/2/sigma2)
+            #for i in range(N):
+            #   for j in range(N):
+            #      pass
+            #      #M[i,j] *= (corr[i]*corr[j])**2
             def X1(x):
                 return M.dot(x)
 
