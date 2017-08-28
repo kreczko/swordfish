@@ -179,7 +179,7 @@ class Swordfish(object):  # Everything is flux!
                     print len(x), sum(x), np.mean(x)
             for i in range(self.ncomp):
                 x0 = self.flux[i]/noise if self.cache is None else self.cache/exposure
-                x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-5)[0]
+                x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-3)[0]
                 x[i] *= exposure
                 self.cache= x[i]
         else:
