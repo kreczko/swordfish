@@ -90,7 +90,6 @@
  \end{tabular}
  };
 
-
  \node[state, below right of=INFO,
 %  right of=ACK,
   node distance=5cm,
@@ -106,9 +105,7 @@
 
  \node[state, below of=FLUX, node distance=1.5cm] (EXP)
  {%
- \begin{tabular}{l}
-   \parbox{4cm}{\textbf{Experimental design}}
- \end{tabular}
+   \textbf{Experimental design}
  };
 
  \node[state, below left of=INFO,
@@ -144,6 +141,16 @@
    \textbf{Discovery reach}
  };
 
+ \node[state, below of=COUNTS,
+%  right of=ACK,
+  node distance=2.5cm,
+%  anchor=center
+] (LIKE) 
+ {%
+   \textbf{Model likelihood}
+ };
+
+
 
  % draw the paths and and print some Text below/above the graph
 % \path (QUERY) edge[bend left=20] node[anchor=south,above]{$SC_n=0$}
@@ -159,6 +166,7 @@
 \path (INFO) edge[bend right=0] (COUNTS);
 \path (COUNTS) edge (LIMITS);
 \path (COUNTS) edge (REACH);
+\path (COUNTS) edge (LIKE);
 \path (GEO) edge (CONTOUR);
 \path (FLUX) edge (EXP);
 
