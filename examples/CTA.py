@@ -4,16 +4,19 @@
 from __future__ import division
 import healpy as hp
 import numpy as np
-import harpix as harp
+import HARPix as harp
 import pylab as plt
 import swordfish as sf
 from tools import *
 from scipy.interpolate import interp1d
 from scipy.integrate import quad
 from math import cos, sin
+from matplotlib import rc
 from PPPC4DMID import interp
 import metricplot as mp
-import DSspectra
+# import DSspectra
+rc('font', family='serif', serif='cmr10', size=12)
+rc('text', usetex=True)
 
 #################
 # DM distribution
@@ -102,10 +105,10 @@ def get_exposure(E, Tobs):
 
 
 def get_sig_spec(sv, m, E, ch='bb'):
-    #spec_DM = interp.Interp(ch=ch)
-    #return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
-    s = DSspectra.spec(channel='bb', mass = m, type='gam')
-    return E.integrate(lambda x: sv/8/np.pi/m**2*s(x))
+    spec_DM = interp.Interp(ch=ch)
+    return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
+    # s = DSspectra.spec(channel='bb', mass = m, type='gam')
+    # return E.integrate(lambda x: sv/8/np.pi/m**2*s(x))
 
 
 #######################
@@ -115,7 +118,7 @@ def get_sig_spec(sv, m, E, ch='bb'):
 
 def CTA(m_DM, UL = True, syst_flag = True, Tobs = 100.):
     # Parameters
-    E = Logbins(1.0, 4.0, 50)   # GeV 10 GeV - 10 TeV
+    E = Logbins(1.0, 3.0, 50)   # GeV 10 GeV - 10 TeV
     unc = 0.01 # 1% bkg uncertainty
     corr_length = 1  # 10 deg correlation length of bkg uncertainty
     Sigma = get_sigma(E.means, lambda x, y: np.exp(-(x-y)**2/2/(x*y)/0.5**2))
@@ -168,7 +171,7 @@ def CTA(m_DM, UL = True, syst_flag = True, Tobs = 100.):
         return F
 
 def generate_dump(syst_flag = True):
-    mlist = np.logspace(1.5, 4.0, 10)
+    mlist = np.logspace(1.5, 3.0, 30)
     svlist = np.logspace(-27, -24, 31)
     ULlist = []
     G = np.zeros((len(svlist), len(mlist),2,2))
@@ -195,9 +198,9 @@ def generate_dump(syst_flag = True):
 def CTA_plot():
     #visual.loglog_from_npz('dump.npz')
     tf = mp.TensorField.fromfile('dump1.npz', logx = True, logy = True)
-    #tf.quiver()
-    #plt.savefig('test.eps')
-    #quit()
+    # tf.quiver()
+    # plt.savefig('test.eps')
+    # quit()
     vf1, vf2 = tf.get_VectorFields()
     mask = lambda x, y: y < np.log10(3e-26)
     lines = vf1.get_streamlines([2, -26.0], Nmax=100, mask = mask, Nsteps = 100)
@@ -209,22 +212,31 @@ def CTA_plot():
        line = 10**line
        plt.plot(line.T[0], line.T[1], color='0.5')
 
-    contour = 10**tf.get_contour([3, -26.0], 1, Npoints = 300)
-    plt.plot(contour.T[0], contour.T[1], 'b')
-    contour = 10**tf.get_contour([3, -26.0], 2, Npoints = 300)
-    plt.plot(contour.T[0], contour.T[1], 'b--')
+    contour = 10**tf.get_contour([2.5, -26.0], 1, Npoints = 300)
+    plt.plot(contour.T[0], contour.T[1], 'b', label=r"$1\sigma$ Contsant Geodesic")
+    contour = 10**tf.get_contour([2.5, -26.0], 2, Npoints = 300)
+    plt.plot(contour.T[0], contour.T[1], 'b--', label=r"$2\sigma$ Contsant Geodesic")
     contour = 10**tf.get_contour([2, -26.0], 1, Npoints = 300)
     plt.plot(contour.T[0], contour.T[1], 'b')
     contour = 10**tf.get_contour([2, -26.0], 2, Npoints = 300)
     plt.plot(contour.T[0], contour.T[1], 'b--')
+    contour = 10**tf.get_contour([2.8, -25.7], 1, Npoints = 300)
+    plt.plot(contour.T[0], contour.T[1], 'b')
+    contour = 10**tf.get_contour([2.8, -25.7], 2, Npoints = 300)
+    plt.plot(contour.T[0], contour.T[1], 'b--')
 
     x = np.load('dump2.npz')['x']
     y = np.load('dump2.npz')['y']
-    plt.loglog(x, y, 'r')
+    plt.loglog(x, y, 'r', label=r"$95\%$ Exclusion Limit")
 
     plt.gca().set_xscale('log')
     plt.gca().set_yscale('log')
-    plt.savefig('test.eps')
+    plt.xlim(1.5e1,1.e3)
+    plt.ylim(1e-27,3e-26)
+    plt.legend()
+    plt.xlabel(r"Mass $m_{\textrm{DM}}$ [GeV]")
+    plt.ylabel(r"Self-annihilation cross-section $\langle \sigma v \rangle$ [$\textrm{cm}^3 \textrm{s}^-1$]")
+    plt.savefig('CTA.pdf')
 
 if __name__ == "__main__":
     generate_dump(syst_flag = False)
