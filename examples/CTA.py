@@ -60,34 +60,34 @@ def get_Jmap():
 #######################
 
 def dNdE_e(E):
-    # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
+    """Cosmic-ray electron flux, 1/GeV cm2 s sr."""
+    # TODO: Add reference
     E0 = 1e3
-    return 1.17e-11*np.where(E > 1e3, (E/E0)**-3.9, (E/E0)**-3.0)
+    return 1.17e-11*np.where(E > E0, (E/E0)**-3.9, (E/E0)**-3.0)
 
-# Cosmic ray protons
 def dNdE_p(E):
-    # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
-    # Factor of 3 comes from Silverwood paper and approximately matches
-    # their plot
-    E = E*3./1e3
-    Norm = 8.73e-9
-    Gamma = 2.71
-    return Norm*(E**(-Gamma))
+    """Cosmic-ray proton flux, 1/GeV cm2 s sr."""
+    # Factor of 3 accounts for approximate expected shift in energy
+    # reconstruction, see Silverwood et al.
+    return 8.73e-9*(E*3/1e3)**-2.71
 
 def get_instr_bkg(E):
+    """Crude estimation of instrumental background.  Return HARPix map."""
     CR_Elec_bkg = E.integrate(dNdE_e)
-    proton_eff = 1.e-2
+    proton_eff = 1e-2  # Assumed flat proton efficiency
     CR_Proton_bkg = proton_eff*E.integrate(dNdE_p)
     spec_bkg = CR_Proton_bkg + CR_Elec_bkg
     return harp.HARPix().add_iso(1, fill=1.).expand(spec_bkg)
 
 def get_exposure(E, Tobs):
-    # Effective area taken from https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
+    """Generate exposure table, based on observation time.  Return HARPix map."""
+    # Effective area taken from 
+    # https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
     Et, EffA = np.loadtxt("../data/CTA_effective_A.txt", unpack=True)
     Et *= 1e3  # TeV --> GeV
     EffA *= 1e4  # m2 --> cm2
     EffectiveA_cm2 = interp1d(Et, EffA, fill_value="extrapolate")(E.means)
-    obsT = Tobs*3600 # 100 hours of observation in s
+    obsT = Tobs*3600  # h --> s
     expotab = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
     return harp.HARPix().add_iso(1, fill = 1.).expand(expotab)
 
@@ -96,8 +96,8 @@ def get_exposure(E, Tobs):
 # DM model
 ##########
 
-
 def get_sig_spec(sv, m, E, ch='bb'):
+    # TODO: Replace with analytical apprixmation
     #spec_DM = interp.Interp(ch=ch)
     #return E.integrate(lambda x: sv/8/np.pi/m**2*spec_DM(m,x))
     s = DSspectra.spec(channel='bb', mass = m, type='gam')
@@ -223,8 +223,8 @@ def CTA_plot():
     plt.savefig('test.eps')
 
 if __name__ == "__main__":
-    generate_dump(syst_flag = False)
-    #CTA_plot()
+    #generate_dump(syst_flag = False)
+    CTA_plot()
     #CTA(100, UL = True, syst_flag = True)
     #print CTA(100., UL = True, syst_flag = True, Tobs = .0001)
     #print CTA(100., UL = True, syst_flag = True, Tobs = .01)
