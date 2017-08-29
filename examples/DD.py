@@ -6,8 +6,7 @@ import healpy as hp
 import numpy as np
 import HARPix as harp
 import pylab as plt
-from core import *
-from tools import *
+import swordfish as sf
 from scipy.interpolate import interp1d
 from scipy.integrate import quad
 from math import cos, sin
@@ -20,10 +19,12 @@ g2 = 1.e-18
 def DD(m_DM, UL = True):
     """ This routine will try to recreate the limits from 1808.08571 for the CRESST-III Experiment, a future version of CRESST"""
     c_kms = c*1.e-3 # in km s^-1
+    h = 4.135667662e-15 # eV s
+    h_MeVs = h/1.e6
     m_DM *= 1.e3 # conversion to MeV
-    rho_0 = 0.3*1.e3 # MeV cm^-3
+    rho_0 = 0.3*1.e3*((1e3)**3) # MeV km^-3
     xi_T = 10. # FIXME: Need real values
-    m_T = 68.*1.e3 # MeV FIXME: Need real values
+    m_T = 68.*1.e3 # MeV FIXME: Need real values, currently set to Germanium
     m_med = 10. # MeV
     muT = m_DM*m_T/(m_DM + m_T)
 
@@ -38,19 +39,24 @@ def DD(m_DM, UL = True):
         f = interp1d(v, gave) # 1/(km/s)
         return f
 
-    def dRdE(q):
+    def dRdE(E_R):
         # g is the parameter we wish to set a limit on so is left out
         # Form factor taken from eq4.4 of http://pa.brown.edu/articles/Lewin_Smith_DM_Review.pdf
         # FIXME: Should correct for realistic form factor
-        E_R = q**2./2./m_T
+        # E_R = q**2./2./m_T
         F_T = lambda E_R: np.sqrt(np.exp(-(1./3.)*(E_R**2.)))
         vmin = lambda E_R: np.sqrt(m_T*E_R/2/(muT**2.))
         eta = eta_F()
-        sig = rho_0*xi_T*g2*(F_T(E_R)**2.)*eta(vmin(E_R))/2./np.pi/m_DM/((q**2. + m_med**2.)**2.)
-        print "Recoil spectrum", sig
-        return sig
+        signal = rho_0*xi_T*g2*(F_T(E_R)**2.)*eta(vmin(E_R))/2./np.pi/m_DM/((2.*m_T*E_R + m_med**2.)**2.)
+        print 2./np.pi/m_DM/((2.*m_T*E_R + m_med**2.)**2.)
+        quit()
+        # To convert dR/dE to signal to units of 1/MeV we need to mutiply by h^3/c^4
+        Unit_conversion = h_MeVs**3/c**4
+        signal *= Unit_conversion
+        # print "Recoil spectrum", signal
+        return signal
 
-    def ScatterProb(q, E1, E2):
+    def ScatterProb(E_R, E1, E2):
         # CRESST definitions
         # Energy resoultion is set by a Gaussian at 20eV
         # FIXME: Check energy resolution implementation
@@ -58,34 +64,38 @@ def DD(m_DM, UL = True):
         # sigmaCRESST = 
         # var = lambda x: np.exp(((x-muCRESST)**2.)/2./(sigmaCRESST**2))/2./np.pi
         # print E1, E2
-        E_R = q**2./2./m_T
+        # E_R = q**2./2./m_T
         # print E_R
-        var = 20.*1.e-6 # MeV
+        # var = 20.*1.e-6 # MeV
+        var = 1 # MeV
         # print erf((E1-E_R)/np.sqrt(2)/var)
         prob = (erf((E2-E_R)/np.sqrt(2)/var) - erf((E1-E_R)/np.sqrt(2)/var))/2.
         # prob = 1.
-        print "Probability", prob
+        # print "Probability", prob
         return prob
 
     Eth = 100*1e-6 # in MeV
-    Vobs = 544. # km s^-1
-    Vesc = 232. # km s^-1
+    Vesc = 544. # km s^-1
+    Vobs = 232. # km s^-1
     qmin = np.sqrt(2.*m_T*Eth)
     qmax = 2.*muT*(Vesc + Vobs)/c_kms
+    E_Rmin = qmin**2./2./m_T
+    E_Rmax = qmax**2./2./m_T
     # print qmin, qmax
     # quit()
 
     sig = np.zeros(len(Emeans))
-    sig_dif = lambda q, x1, x2: ScatterProb(q, x1, x2)*dRdE(q)
-    for i in range(len(Emeans)):
-        sig[i] = quad(sig_dif, qmin, qmax, args=(E[i],E[i+1]))[0]
+    sig_dif = lambda ER, x1, x2: ScatterProb(ER, x1, x2)*dRdE(ER)
 
-    print Emeans, sig
-    plt.loglog(Emeans, sig)
-    plt.xlabel(r'$E_R (MeV)$')
-    plt.ylabel(r'$dR/dE_R$')
-    plt.show()
-    quit()
+    for i in range(len(Emeans)):
+        sig[i] = quad(sig_dif, E_Rmin, E_Rmax, args=(E[i],E[i+1]))[0]
+
+    # print Emeans, sig
+    # plt.loglog(Emeans, sig)
+    # plt.xlabel(r'$E_R (MeV)$')
+    # plt.ylabel(r'$dR/dE_R$')
+    # plt.show()
+    # quit()
 
 ################################### Background definitions
 
@@ -105,14 +115,14 @@ def DD(m_DM, UL = True):
 
 ################################### Exposure Goes here
     obsT = np.zeros(len(E))
-    obsT += 1e10 # 100 hours of observation in s
+    obsT += 100*3600 # 100 hours of observation in s
 
     if UL:
         systematics = None
-        m = Model(sig, bkg, systematics, obsT, solver='cg', verbose = True)
+        m = sf.Swordfish(sig, bkg, systematics, obsT, solver='cg', verbose = True)
 
         # Calculate upper limits with effective counts method
-        ec = EffectiveCounts(m)
+        ec = sf.EffectiveCounts(m)
         UL = ec.upperlimit(0.05, 0, gaussian = True)
         s, b = ec.effectivecounts(0, 1.)
 
@@ -128,11 +138,11 @@ def DD(m_DM, UL = True):
         #plt.savefig('test.eps')
         return UL
     else:
-        fluxes, noise, systematics, exposure = get_model_input([sig, dsig], bkg,
-                [dict(err = bkg*unc, sigma = corr_length, Sigma = None, nside =
-                   0)], expo)
-        systematics = None
-        m = Model(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
+        # fluxes, noise, systematics, exposure = get_model_input([sig, dsig], bkg,
+        #         [dict(err = bkg*unc, sigma = corr_length, Sigma = None, nside =
+        #            0)], expo)
+        # systematics = None
+        m = sf.Swordfish(fluxes, noise, systematics, exposure, solver='cg', verbose = False)
         F = m.fishermatrix()
         return F
 
@@ -144,12 +154,14 @@ def UL_plot():
         UL = DD(m, UL = True)
         ULlist.append(UL*g2)
 
-    plt.loglog(mlist, np.sqrt(ULlist), label="My calculation")
+    # plt.loglog(mlist, np.sqrt(ULlist), label="My calculation")
     plt.loglog(mDM, glim, label="From paper")
-    plt.legend()
+    print mDM, glim
+    # plt.legend()
     plt.show()
+    quit()
 
 
 if __name__ == "__main__":
-    DD(4.) # Input in GeV
-    # UL_plot()
+    # DD(4.) # Input in GeV
+    UL_plot()
