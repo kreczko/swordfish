@@ -24,9 +24,8 @@ def get_los():
     MW_D = 8.5 # kpc
     MW_rs = 20 # kpc
     alpha = 0.17
-    MW_rhoS = 1.5*0.081351425781930664 # GeV cm^-3
-    # Local density is 0.3 GeV/cm3 in this case
-    kpc_cm = 3.086e21 # conversion factor
+    MW_rhoS = 0.122 # GeV cm^-3 (local density of 0.3 GeV/cm3)
+    kpc_cm = 3.086e21 # kpc/cm
     def Lum_los(d, l, b):
         """Returns density squared for given galactic coordinates l and b at 
         distance d away from Suns location"""
@@ -39,10 +38,7 @@ def get_los():
         if R < 1e-5:
             R = 1e-5
         ratio = R/MW_rs
-        # Einasto profile in units of GeV cm^-3
-        #rho_dm = MW_rhoS*np.exp(-(2/alpha)*((ratio)**alpha - 1))
         rho_dm = MW_rhoS*np.exp(-(2/alpha)*((ratio)**alpha - 1))
-        # Returns signal for annihilating DM rho**2
         return rho_dm**2.
     l = np.logspace(-3,np.log10(180),num=50)
     los = np.zeros(len(l))
@@ -52,11 +48,11 @@ def get_los():
     return Interp_sig
 
 def get_Jmap():
-   Interp_sig = get_los()
-   #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
-   Jmap = harp.HARPix().add_disc((0,0), 5, 32)
-   Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
-   return Jmap
+    Interp_sig = get_los()
+    #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
+    Jmap = harp.HARPix().add_disc((0,0), 5, 32)
+    Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
+    return Jmap
 
 
 #######################
@@ -64,9 +60,9 @@ def get_Jmap():
 #######################
 
 def dNdE_e(E):
-     # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
-     E0 = 1e3
-     return 1.17e-11*np.where(E > 1e3, (E/E0)**-3.9, (E/E0)**-3.0)
+    # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
+    E0 = 1e3
+    return 1.17e-11*np.where(E > 1e3, (E/E0)**-3.9, (E/E0)**-3.0)
 
 # Cosmic ray protons
 def dNdE_p(E):
@@ -202,12 +198,12 @@ def CTA_plot():
     mask = lambda x, y: y < np.log10(3e-26)
     lines = vf1.get_streamlines([2, -26.0], Nmax=100, mask = mask, Nsteps = 100)
     for line in lines:
-       line = 10**line
-       plt.plot(line.T[0], line.T[1], color='0.5')
+        line = 10**line
+        plt.plot(line.T[0], line.T[1], color='0.5')
     lines = vf2.get_streamlines([2, -26.0], Nmax=100, mask = mask, Nsteps = 100)
     for line in lines:
-       line = 10**line
-       plt.plot(line.T[0], line.T[1], color='0.5')
+        line = 10**line
+        plt.plot(line.T[0], line.T[1], color='0.5')
 
     contour = 10**tf.get_contour([3, -26.0], 1, Npoints = 300)
     plt.plot(contour.T[0], contour.T[1], 'b')
@@ -228,7 +224,7 @@ def CTA_plot():
 
 if __name__ == "__main__":
     generate_dump(syst_flag = False)
-    CTA_plot()
+    #CTA_plot()
     #CTA(100, UL = True, syst_flag = True)
     #print CTA(100., UL = True, syst_flag = True, Tobs = .0001)
     #print CTA(100., UL = True, syst_flag = True, Tobs = .01)
