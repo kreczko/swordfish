@@ -43,15 +43,16 @@
  % use tabular for content to get columns/rows
  % parbox to limit width of the listing
  \node[state,
-  fill=white!50!yellow
+  %fill=white!50!yellow, 
+  align=left
    ] (MODEL) 
- {\begin{tabular}{l}
+ {
   \textbf{Model}\\
-      $\Phi(\Omega|\theta)$: Model\\
+      $\Phi(\Omega|\theta)$: Predicted counts\\
       $\Phi(\Omega)_{BG}$: Background\\
-      $\Sigma(\Omega, \Omega')_{ij}$: Covariance\\
+      $\Sigma(\Omega, \Omega')$: Covariance\\
       $\mathcal{E}(\Omega)$: Exposure
- \end{tabular}};
+ };
   
  % State: ACK with different content
  \node[state,    	% layout (defined above)
@@ -59,48 +60,39 @@
   %yshift=0cm, 		% move 2cm in y
   right of=MODEL, 	% Position is to the right of QUERY
   node distance=5.0cm, 	% distance to QUERY
-  fill=white!50!yellow,
-  anchor=center] (INFO) 	% posistion relative to the center of the 'box'
+  %fill=white!70!yellow,
+  anchor=center, align=center] (INFO) 	% posistion relative to the center of the 'box'
  {%
- \begin{tabular}{l} 	% content
-   \parbox{3.5cm}{
-   \textbf{Fisher Information Matrix}}
-   \\[2mm]
-  $\mathcal{I}_{ij}(\theta)$
- \end{tabular}
+   \textbf{Fisher Information Matrix}\\
+   $\color{red}\mathcal{I}_{ij}(\theta)$
  };
  
  % STATE EPC
  \node[state,
   below of=INFO,
-  node distance=2.5cm,
-  anchor=center] (GEO) 
+  node distance=3.5cm,
+  anchor=center, align=center] (GEO) 
  {%
- \begin{tabular}{l}
-   \parbox{4cm}{\textbf{Information Geometry}}\\
-   $g_{ij} = \mathcal{I}_{ij}$
- \end{tabular}
+   \textbf{Information Geometry} \\
+   ${\color{red}g_{ij}(\theta)} = \mathcal{I}_{ij}(\theta)$
  };
 
- \node[state, below of=GEO, node distance = 2cm] (CONTOUR)
+ \node[state, below of=GEO, node distance = 2.5cm, align=center] (CONTOUR)
  {
- \begin{tabular}{l}
-   \parbox{4cm}{\textbf{Confidence contours}}\\
-   \parbox{3cm}{$\simeq$ equal geodesic distance contours}
- \end{tabular}
+   \textbf{Confidence contours}\\
+   $\simeq$ equal geodesic distance contours
  };
 
  \node[state, below right of=INFO,
 %  right of=ACK,
   node distance=5cm,
-  xshift = 2cm
+  xshift = 2cm,
+  align =center
 %  anchor=center
 ] (FLUX) 
  {%
- \begin{tabular}{l}
-   \parbox{4cm}{\textbf{Information Flux}}\\
- $\mathcal{I}(\theta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\mathcal{F}(\Omega)_{ij}$
- \end{tabular}
+   \textbf{Information Flux}\\
+   $\mathcal{I}(\theta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\color{red}\mathcal{F}(\Omega|\theta)_{ij}$
  };
 
  \node[state, below of=FLUX, node distance=1.5cm] (EXP)
@@ -111,14 +103,13 @@
  \node[state, below left of=INFO,
 %  right of=ACK,
   node distance=5cm,
-  xshift = -2cm
+  xshift = -2cm,
+  align=center
 %  anchor=center
 ] (COUNTS) 
  {%
- \begin{tabular}{l}
-   \parbox{5cm}{\textbf{Effective counts method}}\\
-   $\mathcal{I}_{ij}(\theta) \to \left(s_i(\theta), b_i(\theta)\right)$
- \end{tabular}
+   \textbf{Effective counts}\\
+   $\mathcal{I}_{ij}(\theta) \to \color{red}\left(s_i(\theta), b_i(\theta)\right)$
  };
 
  \node[state, below of=COUNTS,
