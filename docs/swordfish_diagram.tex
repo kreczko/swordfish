@@ -22,6 +22,8 @@
 \usetikzlibrary{arrows,automata}
 \usetikzlibrary{positioning}
 
+\newcommand{\btheta}{{\boldsymbol\theta}}
+
 
 \tikzset{
     state/.style={
@@ -47,9 +49,9 @@
   align=left
    ] (MODEL) 
  {
-  \textbf{Model}\\
-      $\Phi(\Omega|\theta)$: Predicted counts\\
-      $\Phi(\Omega)_{BG}$: Background\\
+  \textbf{Unbinned Poisson model}\\
+      $I(\Omega|\btheta)$: Intensity\\
+      $N(\Omega)$: Noise\\
       $\Sigma(\Omega, \Omega')$: Covariance\\
       $\mathcal{E}(\Omega)$: Exposure
  };
@@ -63,8 +65,9 @@
   %fill=white!70!yellow,
   anchor=center, align=center] (INFO) 	% posistion relative to the center of the 'box'
  {%
-   \textbf{Fisher Information Matrix}\\
-   $\color{red}\mathcal{I}_{ij}(\theta)$
+   \textbf{Fisher Information Matrix}\\[1mm]
+   ${\color{red}\mathcal{I}_{ij}(\btheta)} = -\left\langle \frac{\ln\mathcal{L}(\mathcal{D}|\btheta)}{\partial \theta_i \theta_j}
+   \right\rangle_{\mathcal{D}(\btheta)}$
  };
  
  % STATE EPC
@@ -74,13 +77,19 @@
   anchor=center, align=center] (GEO) 
  {%
    \textbf{Information Geometry} \\
-   ${\color{red}g_{ij}(\theta)} = \mathcal{I}_{ij}(\theta)$
+   ${\color{red}g_{ij}(\btheta)} = \mathcal{I}_{ij}(\btheta)$
  };
 
- \node[state, below of=GEO, node distance = 2.5cm, align=center] (CONTOUR)
+ \node[state, below right of=GEO, node distance = 5.0cm, align=center] (CONTOUR)
  {
    \textbf{Confidence contours}\\
    $\simeq$ equal geodesic distance contours
+ };
+
+ \node[state, below left of=GEO, node distance = 5.0cm, align=center] (JEF)
+ {
+   \textbf{Discrimination power}\\
+   $V = \int d\btheta \sqrt{\det{g_{ij}(\btheta)}}$
  };
 
  \node[state, below right of=INFO,
@@ -92,12 +101,12 @@
 ] (FLUX) 
  {%
    \textbf{Information Flux}\\
-   $\mathcal{I}(\theta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\color{red}\mathcal{F}(\Omega|\theta)_{ij}$
+   $\mathcal{I}(\btheta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\color{red}\mathcal{F}(\Omega|\btheta)_{ij}$
  };
 
  \node[state, below of=FLUX, node distance=1.5cm] (EXP)
  {%
-   \textbf{Experimental design}
+   \textbf{Optimal observation strategy}
  };
 
  \node[state, below left of=INFO,
@@ -109,7 +118,7 @@
 ] (COUNTS) 
  {%
    \textbf{Effective counts}\\
-   $\mathcal{I}_{ij}(\theta) \to \color{red}\left(s_i(\theta), b_i(\theta)\right)$
+   $\mathcal{I}_{ij}(\btheta) \to \color{red}\left(s_i(\btheta), b_i(\btheta)\right)$
  };
 
  \node[state, below of=COUNTS,
@@ -159,6 +168,7 @@
 \path (COUNTS) edge (REACH);
 \path (COUNTS) edge (LIKE);
 \path (GEO) edge (CONTOUR);
+\path (GEO) edge (JEF);
 \path (FLUX) edge (EXP);
 
 \end{tikzpicture}
