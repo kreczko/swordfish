@@ -63,22 +63,23 @@
   anchor=center] (INFO) 	% posistion relative to the center of the 'box'
  {%
  \begin{tabular}{l} 	% content
-   \parbox{3.5cm}{
+   \parbox{4.7cm}{
    \textbf{Fisher Information Matrix}}
-   \\[2mm]
-  $\mathcal{I}_{ij}(\theta)$
+   \\[1mm]
+  $\quad\qquad\qquad\mathcal{I}_{ij}(\theta)$
  \end{tabular}
  };
  
  % STATE EPC
  \node[state,
   below of=INFO,
-  node distance=2.5cm,
+  node distance=2cm,
+  xshift = 6cm,
   anchor=center] (GEO) 
  {%
  \begin{tabular}{l}
    \parbox{4cm}{\textbf{Information Geometry}}\\
-   $g_{ij} = \mathcal{I}_{ij}$
+   $\qquad\qquad g_{ij} = \mathcal{I}_{ij}$
  \end{tabular}
  };
 
@@ -86,19 +87,19 @@
  {
  \begin{tabular}{l}
    \parbox{4cm}{\textbf{Confidence contours}}\\
-   \parbox{3cm}{$\simeq$ equal geodesic distance contours}
+   \parbox{4.5cm}{$\simeq$ constant geodesic distance contours}
  \end{tabular}
  };
 
  \node[state, below right of=INFO,
 %  right of=ACK,
   node distance=5cm,
-  xshift = 2cm
+  xshift = -3cm
 %  anchor=center
 ] (FLUX) 
  {%
  \begin{tabular}{l}
-   \parbox{4cm}{\textbf{Information Flux}}\\
+   \parbox{4cm}{\textbf{   Information Flux}}\\
  $\mathcal{I}(\theta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\mathcal{F}(\Omega)_{ij}$
  \end{tabular}
  };
@@ -116,15 +117,15 @@
 ] (COUNTS) 
  {%
  \begin{tabular}{l}
-   \parbox{5cm}{\textbf{Effective counts method}}\\
-   $\mathcal{I}_{ij}(\theta) \to \left(s_i(\theta), b_i(\theta)\right)$
+   \parbox{4.3cm}{\textbf{Effective counts method}}\\
+   $\quad\mathcal{I}_{ij}(\theta) \to \left(s_i(\theta), b_i(\theta)\right)$
  \end{tabular}
  };
 
  \node[state, below of=COUNTS,
 %  right of=ACK,
   node distance=1.5cm,
-  xshift = -1.8cm
+  xshift = +1.8cm
 %  anchor=left
 ] (LIMITS) 
  {
@@ -134,21 +135,21 @@
  \node[state, below of=COUNTS,
 %  right of=ACK,
   node distance=1.5cm,
-  xshift = +1.8cm
+  xshift = -1.8cm
 %  anchor=center
 ] (REACH) 
  {
    \textbf{Discovery reach}
  };
 
- \node[state, below of=COUNTS,
-%  right of=ACK,
-  node distance=2.5cm,
-%  anchor=center
-] (LIKE) 
- {%
-   \textbf{Model likelihood}
- };
+% \node[state, below of=COUNTS,
+%%  right of=ACK,
+%  node distance=2.5cm,
+%%  anchor=center
+%] (LIKE) 
+% {%
+%   \textbf{Model likelihood}
+% };
 
 
 
@@ -164,9 +165,9 @@
 \path (INFO) edge (GEO);
 \path (INFO) edge[bend left=0]  (FLUX);
 \path (INFO) edge[bend right=0] (COUNTS);
-\path (COUNTS) edge (LIMITS);
 \path (COUNTS) edge (REACH);
-\path (COUNTS) edge (LIKE);
+\path (COUNTS) edge (LIMITS);
+%\path (COUNTS) edge (LIKE);
 \path (GEO) edge (CONTOUR);
 \path (FLUX) edge (EXP);
 
