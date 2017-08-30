@@ -88,8 +88,6 @@ def DD(m_DM, UL = True):
 #        sig[i] = quad(sig_dif, E_Rmin, E_Rmax, args=(E[i],E[i+1]))[0]
 
     sig = dRdE(Emeans)*Ewidth
-    print sig
-    quit()
 
     # print dRdE_A, qdiff
     # print Emeans, sig
