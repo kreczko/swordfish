@@ -1,3 +1,4 @@
+
 % EPC flow charts
 % Author: Fabian Schuh
 \documentclass{minimal}
@@ -168,6 +169,174 @@
 \path (COUNTS) edge (REACH);
 \path (COUNTS) edge (LIMITS);
 %\path (COUNTS) edge (LIKE);
+\path (GEO) edge (CONTOUR);
+\path (FLUX) edge (EXP);
+
+\end{tikzpicture}
+
+
+\end{document}
+=======
+% EPC flow charts
+% Author: Fabian Schuh
+\documentclass{minimal}
+
+\usepackage{pgf}
+\usepackage{tikz}
+\usepackage{amsmath}
+%%%<
+\usepackage{verbatim}
+\usepackage[active,tightpage]{preview}
+\PreviewEnvironment{tikzpicture}
+\setlength\PreviewBorder{5pt}%
+%%%>
+
+\begin{comment}
+:Title:  EPC flow charts
+:Grid: 1x2
+
+
+\end{comment}
+\usepackage[utf8]{inputenc}
+\usetikzlibrary{arrows,automata}
+\usetikzlibrary{positioning}
+
+
+\tikzset{
+    state/.style={
+           rectangle,
+           rounded corners,
+           draw=black, very thick,
+           minimum height=2em,
+           inner sep=2pt,
+           text centered,
+           },
+}
+
+\begin{document}
+
+\begin{tikzpicture}[->,>=stealth']
+
+ % Position of QUERY 
+ % Use previously defined 'state' as layout (see above)
+ % use tabular for content to get columns/rows
+ % parbox to limit width of the listing
+ \node[state,
+  %fill=white!50!yellow, 
+  align=left
+   ] (MODEL) 
+ {
+  \textbf{Model}\\
+      $\Phi(\Omega|\theta)$: Predicted counts\\
+      $\Phi(\Omega)_{BG}$: Background\\
+      $\Sigma(\Omega, \Omega')$: Covariance\\
+      $\mathcal{E}(\Omega)$: Exposure
+ };
+  
+ % State: ACK with different content
+ \node[state,    	% layout (defined above)
+%  text width=3cm, 	% max text width
+  %yshift=0cm, 		% move 2cm in y
+  right of=MODEL, 	% Position is to the right of QUERY
+  node distance=5.0cm, 	% distance to QUERY
+  %fill=white!70!yellow,
+  anchor=center, align=center] (INFO) 	% posistion relative to the center of the 'box'
+ {%
+   \textbf{Fisher Information Matrix}\\
+   $\color{red}\mathcal{I}_{ij}(\theta)$
+ };
+ 
+ % STATE EPC
+ \node[state,
+  below of=INFO,
+  node distance=3.5cm,
+  anchor=center, align=center] (GEO) 
+ {%
+   \textbf{Information Geometry} \\
+   ${\color{red}g_{ij}(\theta)} = \mathcal{I}_{ij}(\theta)$
+ };
+
+ \node[state, below of=GEO, node distance = 2.5cm, align=center] (CONTOUR)
+ {
+   \textbf{Confidence contours}\\
+   $\simeq$ equal geodesic distance contours
+ };
+
+ \node[state, below right of=INFO,
+%  right of=ACK,
+  node distance=5cm,
+  xshift = 2cm,
+  align =center
+%  anchor=center
+] (FLUX) 
+ {%
+   \textbf{Information Flux}\\
+   $\mathcal{I}(\theta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\color{red}\mathcal{F}(\Omega|\theta)_{ij}$
+ };
+
+ \node[state, below of=FLUX, node distance=1.5cm] (EXP)
+ {%
+   \textbf{Experimental design}
+ };
+
+ \node[state, below left of=INFO,
+%  right of=ACK,
+  node distance=5cm,
+  xshift = -2cm,
+  align=center
+%  anchor=center
+] (COUNTS) 
+ {%
+   \textbf{Effective counts}\\
+   $\mathcal{I}_{ij}(\theta) \to \color{red}\left(s_i(\theta), b_i(\theta)\right)$
+ };
+
+ \node[state, below of=COUNTS,
+%  right of=ACK,
+  node distance=1.5cm,
+  xshift = -1.8cm
+%  anchor=left
+] (LIMITS) 
+ {
+   \textbf{Exclusion limits}
+ };
+
+ \node[state, below of=COUNTS,
+%  right of=ACK,
+  node distance=1.5cm,
+  xshift = +1.8cm
+%  anchor=center
+] (REACH) 
+ {
+   \textbf{Discovery reach}
+ };
+
+ \node[state, below of=COUNTS,
+%  right of=ACK,
+  node distance=2.5cm,
+%  anchor=center
+] (LIKE) 
+ {%
+   \textbf{Model likelihood}
+ };
+
+
+
+ % draw the paths and and print some Text below/above the graph
+% \path (QUERY) edge[bend left=20] node[anchor=south,above]{$SC_n=0$}
+%                                    node[anchor=north,below]{$RN_{16}$} (ACK)
+% (QUERY)     	edge[bend left=0] node[anchor=south,above]{$SC_n\neq 0$} (QUERYREP)
+% (ACK)       	edge                                                     (EPC)
+% (EPC)       	edge[bend left]                                          (QUERYREP)
+% (QUERYREP)  	edge[loop below]    node[anchor=north,below]{$SC_n\neq 0$} (QUERYREP)
+% (QUERYREP)  	edge                node[anchor=left,right]{$SC_n = 0$} (ACK);
+\path (MODEL) edge (INFO);
+\path (INFO) edge (GEO);
+\path (INFO) edge[bend left=0]  (FLUX);
+\path (INFO) edge[bend right=0] (COUNTS);
+\path (COUNTS) edge (LIMITS);
+\path (COUNTS) edge (REACH);
+\path (COUNTS) edge (LIKE);
 \path (GEO) edge (CONTOUR);
 \path (FLUX) edge (EXP);
 
