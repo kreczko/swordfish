@@ -163,7 +163,7 @@
 \path (MODEL) edge (INFO);
 \path (INFO) edge (GEO);
 \path (INFO) edge[bend left=0]  (FLUX);
-\path (INFO) edge[bend right=0] (COUNTS);
+\path (INFO) edge[bend right=0] node[rotate=33, anchor=south]{Additive components} (COUNTS);
 \path (COUNTS) edge (LIMITS);
 \path (COUNTS) edge (REACH);
 \path (COUNTS) edge (LIKE);
