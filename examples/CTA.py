@@ -27,9 +27,8 @@ def get_los():
     MW_D = 8.5 # kpc
     MW_rs = 20 # kpc
     alpha = 0.17
-    MW_rhoS = 1.5*0.081351425781930664 # GeV cm^-3
-    # Local density is 0.3 GeV/cm3 in this case
-    kpc_cm = 3.086e21 # conversion factor
+    MW_rhoS = 0.122 # GeV cm^-3 (local density of 0.3 GeV/cm3)
+    kpc_cm = 3.086e21 # kpc/cm
     def Lum_los(d, l, b):
         """Returns density squared for given galactic coordinates l and b at 
         distance d away from Suns location"""
@@ -42,10 +41,7 @@ def get_los():
         if R < 1e-5:
             R = 1e-5
         ratio = R/MW_rs
-        # Einasto profile in units of GeV cm^-3
-        #rho_dm = MW_rhoS*np.exp(-(2/alpha)*((ratio)**alpha - 1))
         rho_dm = MW_rhoS*np.exp(-(2/alpha)*((ratio)**alpha - 1))
-        # Returns signal for annihilating DM rho**2
         return rho_dm**2.
     l = np.logspace(-3,np.log10(180),num=50)
     los = np.zeros(len(l))
@@ -55,11 +51,11 @@ def get_los():
     return Interp_sig
 
 def get_Jmap():
-   Interp_sig = get_los()
-   #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
-   Jmap = harp.HARPix().add_disc((0,0), 5, 32)
-   Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
-   return Jmap
+    Interp_sig = get_los()
+    #sig = harp.HARPix(dims=dims).add_singularity((0,0), 1, 20, n = 10)
+    Jmap = harp.HARPix().add_disc((0,0), 5, 32)
+    Jmap.add_func(lambda d: Interp_sig(d), mode = 'dist', center=(0,0))
+    return Jmap
 
 
 #######################
@@ -67,34 +63,34 @@ def get_Jmap():
 #######################
 
 def dNdE_e(E):
-     # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
-     E0 = 1e3
-     return 1.17e-11*np.where(E > 1e3, (E/E0)**-3.9, (E/E0)**-3.0)
+    """Cosmic-ray electron flux, 1/GeV cm2 s sr."""
+    # TODO: Add reference
+    E0 = 1e3
+    return 1.17e-11*np.where(E > E0, (E/E0)**-3.9, (E/E0)**-3.0)
 
-# Cosmic ray protons
 def dNdE_p(E):
-    # dPhi/dE/dOmega in (GeV cm^2 s sr)^-1
-    # Factor of 3 comes from Silverwood paper and approximately matches
-    # their plot
-    E = E*3./1e3
-    Norm = 8.73e-9
-    Gamma = 2.71
-    return Norm*(E**(-Gamma))
+    """Cosmic-ray proton flux, 1/GeV cm2 s sr."""
+    # Factor of 3 accounts for approximate expected shift in energy
+    # reconstruction, see Silverwood et al.
+    return 8.73e-9*(E*3/1e3)**-2.71
 
 def get_instr_bkg(E):
+    """Crude estimation of instrumental background.  Return HARPix map."""
     CR_Elec_bkg = E.integrate(dNdE_e)
-    proton_eff = 1.e-2
+    proton_eff = 1e-2  # Assumed flat proton efficiency
     CR_Proton_bkg = proton_eff*E.integrate(dNdE_p)
     spec_bkg = CR_Proton_bkg + CR_Elec_bkg
     return harp.HARPix().add_iso(1, fill=1.).expand(spec_bkg)
 
 def get_exposure(E, Tobs):
-    # Effective area taken from https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
+    """Generate exposure table, based on observation time.  Return HARPix map."""
+    # Effective area taken from 
+    # https://portal.cta-observatory.org/CTA_Observatory/performance/SiteAssets/SitePages/Home/PPP-South-EffectiveAreaNoDirectionCut.png
     Et, EffA = np.loadtxt("../data/CTA_effective_A.txt", unpack=True)
     Et *= 1e3  # TeV --> GeV
     EffA *= 1e4  # m2 --> cm2
     EffectiveA_cm2 = interp1d(Et, EffA, fill_value="extrapolate")(E.means)
-    obsT = Tobs*3600 # 100 hours of observation in s
+    obsT = Tobs*3600  # h --> s
     expotab = obsT*EffectiveA_cm2  # Exposure in cm2 s  (Aeff * Tobs)
     return harp.HARPix().add_iso(1, fill = 1.).expand(expotab)
 
@@ -102,7 +98,6 @@ def get_exposure(E, Tobs):
 ##########
 # DM model
 ##########
-
 
 def get_sig_spec(sv, m, E, ch='bb'):
     spec_DM = interp.Interp(ch=ch)
@@ -205,12 +200,12 @@ def CTA_plot():
     mask = lambda x, y: y < np.log10(3e-26)
     lines = vf1.get_streamlines([2, -26.0], Nmax=100, mask = mask, Nsteps = 100)
     for line in lines:
-       line = 10**line
-       plt.plot(line.T[0], line.T[1], color='0.5')
+        line = 10**line
+        plt.plot(line.T[0], line.T[1], color='0.5')
     lines = vf2.get_streamlines([2, -26.0], Nmax=100, mask = mask, Nsteps = 100)
     for line in lines:
-       line = 10**line
-       plt.plot(line.T[0], line.T[1], color='0.5')
+        line = 10**line
+        plt.plot(line.T[0], line.T[1], color='0.5')
 
     contour = 10**tf.get_contour([2.5, -26.0], 1, Npoints = 300)
     plt.plot(contour.T[0], contour.T[1], 'b', label=r"$1\sigma$ Contsant Geodesic")
@@ -239,7 +234,7 @@ def CTA_plot():
     plt.savefig('CTA.pdf')
 
 if __name__ == "__main__":
-    generate_dump(syst_flag = False)
+    #generate_dump(syst_flag = False)
     CTA_plot()
     #CTA(100, UL = True, syst_flag = True)
     #print CTA(100., UL = True, syst_flag = True, Tobs = .0001)
