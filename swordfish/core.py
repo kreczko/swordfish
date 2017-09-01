@@ -114,6 +114,7 @@ class Swordfish(object):  # Everything is flux!
         self.solver = solver
         self.nbins = len(self.noise)  # Number of bins
         self.ncomp = len(self.flux)   # Number of flux components
+        self.sysflag = systematics is not None
         if systematics is not None:
             self.systematics = la.aslinearoperator(systematics)
         else:
@@ -156,12 +157,27 @@ class Swordfish(object):  # Everything is flux!
             self.fixed = np.zeros(self.ncomp, dtype='bool')
         return self
 
-    def _solveD(self, thetas = None, psi = 1.):
-        noise = self.noise*1.  # Make copy
-        exposure = self.exposure*psi
+    def _summedNoise(self, thetas = None):
+        noise_tot = self.noise*1.  # Make copy
         if thetas is not None: 
             for i in range(max(self.ncomp, len(thetas))):
-                noise += thetas[i]*self.flux[i]
+                noise_tot += thetas[i]*self.flux[i]
+        return noise_tot
+
+    def _solveD(self, thetas = None, psi = 1.):
+        """
+        Calculates:
+            N = noise + thetas*flux
+            D = diag(E)*Sigma*diag(E)+diag(N*E)
+            x[i] = D^-1 flux[i]*E
+
+        Note: if Sigma = 0: x[i] = flux[i]/noise
+
+        Returns:
+            x, noise, exposure
+        """
+        noise = self._summedNoise(thetas)
+        exposure = self.exposure*psi
         spexp = la.aslinearoperator(sp.diags(exposure))
         D = (
                 la.aslinearoperator(sp.diags(noise*exposure))
@@ -267,6 +283,26 @@ class Swordfish(object):  # Everything is flux!
                     for m in range(n-1):
                         eff_F = eff_F + C[j]*invB[j,l]*F[indices[l],indices[m]]*invB[m,k]*C[k]
         return eff_F
+
+    def lnL(self, thetas, thetas0):
+        """Return likelihood function.
+
+        Arguments
+        ---------
+        thetas : array-like, optional
+            Definition of flux (added to noise during evaluation).
+        thetas0 : array-like, optional
+            Definition of mock data.
+        """
+        mu0 = self._summedNoise(thetas0)*self.exposure
+        mu =  self._summedNoise(thetas)*self.exposure
+        if self.sysflag:
+            raise NotImplementedError("Does not work with systematics, yet.")
+            x, noise, exposure = self._solveD(thetas)
+            for i in range(max(self.ncomp, len(thetas))):
+                mu += thetas[i]*x[i]*exposure
+        delta_lnL = (mu0*np.log(mu/mu0)-(mu-mu0)).sum()
+        return delta_lnL
 
 class EffectiveCounts(object):
     """EffectiveCounts(model).
