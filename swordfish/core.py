@@ -6,6 +6,8 @@ import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
 import copy
+from scipy.special import gammaln
+from scipy.optimize import fmin_l_bfgs_b
 
 
 def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
@@ -284,7 +286,8 @@ class Swordfish(object):  # Everything is flux!
                         eff_F = eff_F + C[j]*invB[j,l]*F[indices[l],indices[m]]*invB[m,k]*C[k]
         return eff_F
 
-    def lnL(self, thetas, thetas0):
+    # Likelihood with systematics
+    def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-6, derivative = False):
         """Return likelihood function.
 
         Arguments
@@ -293,16 +296,68 @@ class Swordfish(object):  # Everything is flux!
             Definition of flux (added to noise during evaluation).
         thetas0 : array-like, optional
             Definition of mock data.
+        dmu : array-like
+            Systematic deviation.
+        epsilon : Float
+            Magnitude of identity matrix added to Sigma for stable matrix
+            inversion.  Should be smaller than statistical noise to not affect
+            the result.
         """
         mu0 = self._summedNoise(thetas0)*self.exposure
         mu =  self._summedNoise(thetas)*self.exposure
+        if dmu is None:
+            dmu = np.zeros_like(self.exposure)
         if self.sysflag:
-            raise NotImplementedError("Does not work with systematics, yet.")
-            x, noise, exposure = self._solveD(thetas)
-            for i in range(max(self.ncomp, len(thetas))):
-                mu += thetas[i]*x[i]*exposure
-        delta_lnL = (mu0*np.log(mu/mu0)-(mu-mu0)).sum()
-        return delta_lnL
+            mu += dmu
+        lnL = (mu0*np.log(mu)-mu-gammaln(mu0+1)).sum()
+        if self.sysflag:
+            dense = self.systematics(np.eye(self.nbins))
+            invS = np.linalg.linalg.inv(dense+np.eye(self.nbins)*epsilon)
+            lnL -= 0.5*(invS.dot(dmu)*dmu).sum()
+        if derivative:
+            dlnL_dtheta = (mu0/mu*self.flux*self.exposure-self.flux*self.exposure).sum(axis=1)
+            if self.sysflag:
+                dlnL_dmu = mu0/mu - 1. - invS.dot(dmu)
+            else:
+                dlnL_dmu = None
+            return lnL, dlnL_dtheta, dlnL_dmu
+        else:
+            return lnL
+
+    def profile_lnL(self, thetas, thetas0, epsilon = 1e-6,
+            free_thetas = None):
+        """Return profile likelihood.
+
+        Arguments
+        ---------
+        fix_thetas : array-like, boolean
+            Parameters kept fixed during maximization
+        """
+        if free_thetas is None:
+            free_thetas = np.zeros(len(thetas), dtype='bool')
+        Nfree_thetas = (free_thetas).sum()
+        Nsyst = len(self.exposure) if self.sysflag else 0
+        thetas = thetas.copy()
+        N = Nfree_thetas + Nsyst
+        x0 = np.zeros(N)
+        x0[:Nfree_thetas] = thetas[free_thetas]
+        fp = 0.
+        def f(x):
+            global fp
+            thetas[free_thetas] = x[:Nfree_thetas]
+            dmu = x[Nfree_thetas:]
+            lnL, grad_theta, grad_dmu = self.lnL(thetas, thetas0, dmu = dmu, epsilon = epsilon,
+                    derivative = True)
+            fp = np.zeros(N)
+            fp[:Nfree_thetas] = grad_theta[free_thetas]
+            fp[Nfree_thetas:] = grad_dmu
+            return -lnL
+        def fprime(x):
+            global fp
+            return -fp
+        result = fmin_l_bfgs_b(f, x0, fprime)
+        print "best-fit parameters:", result[0]
+        return result[1]
 
 class EffectiveCounts(object):
     """EffectiveCounts(model).

@@ -24,7 +24,6 @@
 
 \newcommand{\btheta}{{\boldsymbol\theta}}
 
-
 \tikzset{
     state/.style={
            rectangle,
@@ -49,10 +48,10 @@
   align=left
    ] (MODEL) 
  {
-  \textbf{Unbinned Poisson model}\\
+  \textbf{Poisson Point Process}\\
       $I(\Omega|\btheta)$: Intensity\\
-      $N(\Omega)$: Noise\\
-      $\Sigma(\Omega, \Omega')$: Covariance\\
+      $N(\Omega)$: Statistical error\\
+      $\Sigma(\Omega, \Omega')$: Systematic error\\
       $\mathcal{E}(\Omega)$: Exposure
  };
   
@@ -61,7 +60,7 @@
 %  text width=3cm, 	% max text width
   %yshift=0cm, 		% move 2cm in y
   right of=MODEL, 	% Position is to the right of QUERY
-  node distance=5.0cm, 	% distance to QUERY
+  node distance=6.0cm, 	% distance to QUERY
   %fill=white!70!yellow,
   anchor=center, align=center] (INFO) 	% posistion relative to the center of the 'box'
  {%
@@ -84,6 +83,11 @@
  {
    \textbf{Confidence contours}\\
    $\simeq$ equal geodesic distance contours
+ };
+
+ \node[state, below of=GEO, node distance = 2.5cm, align=center] (TRIALS)
+ {
+   \textbf{Trial factors}
  };
 
  \node[state, below left of=GEO, node distance = 5.0cm, align=center] (JEF)
@@ -117,14 +121,14 @@
 %  anchor=center
 ] (COUNTS) 
  {%
-   \textbf{Effective counts}\\
+   \textbf{Effective Counts}\\
    $\mathcal{I}_{ij}(\btheta) \to \color{red}\left(s_i(\btheta), b_i(\btheta)\right)$
  };
 
  \node[state, below of=COUNTS,
 %  right of=ACK,
   node distance=1.5cm,
-  xshift = -1.8cm
+  xshift = -1.8cm,
 %  anchor=left
 ] (LIMITS) 
  {
@@ -170,6 +174,7 @@
 \path (GEO) edge (CONTOUR);
 \path (GEO) edge (JEF);
 \path (FLUX) edge (EXP);
+\path (GEO) edge (TRIALS);
 
 \end{tikzpicture}
 
