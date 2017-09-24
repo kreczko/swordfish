@@ -9,9 +9,16 @@ import copy
 from scipy.special import gammaln
 from scipy.optimize import fmin_l_bfgs_b
 
+# - How to get error bands
+# - How to marginalize or profile over non-Gaussian uncertainties
+# - Options:
+#   - All Frequentist
+#   - All Bayesian
+#   - Mixed
+# TODO: Implement constraints
 
 def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
-    """Initialize minuit using non-nonsense interface."""
+    """Initialize minuit using no-nonsense interface."""
     import iminuit
     N = len(x)
     if x_err is not None:
@@ -34,7 +41,6 @@ def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef
             kwargs["fix_"+var] = x_fix[i]
     return iminuit.Minuit(wf, forced_parameters = varnames, errordef =
             errordef, **kwargs)
-
 
 def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
     """Create iminuit.Minuit object from input data.
@@ -92,7 +98,7 @@ class Swordfish(object):  # Everything is flux!
     """Swordfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
     """
     def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
-            verbose = False, constraints = None, scale = 'auto'):
+            verbose = False):
         """Construct swordfish model from input.
 
         Arguments
@@ -103,16 +109,13 @@ class Swordfish(object):  # Everything is flux!
         exposure : {float, 1-D array}
         solver : {'direct', 'cg'}, optional
         verbose : bool, optional
-        constraints : 1-D array, optional
-        scale : {1-D array, 'auto'}
         """
         self.flux = flux
         self.noise = noise
         self.exposure = exposure
         self.cache = None
         self.verbose = verbose
-        self.scale = self._get_auto_scale() if scale == 'auto' else scale
-
+        self.scale = self._get_auto_scale(flux, exposure)
         self.solver = solver
         self.nbins = len(self.noise)  # Number of bins
         self.ncomp = len(self.flux)   # Number of flux components
@@ -120,44 +123,29 @@ class Swordfish(object):  # Everything is flux!
         if systematics is not None:
             self.systematics = la.aslinearoperator(systematics)
         else:
-            self.systematics = la.LinearOperator(
-                    (self.nbins, self.nbins), matvec = lambda x: x*0.)
+            self.systematics = la.LinearOperator((self.nbins, self.nbins), 
+                    matvec = lambda x: np.zeros_like(x))
+#        self.constraints = self._get_constraints(constraints, self.ncomp)
 
-        self.set_constraints(constraints)  # sets self.errors and self.fixed
+    @staticmethod
+    def _get_auto_scale(flux, exposure):
+        return np.array(
+                [1./(f*exposure).max() for f in flux]
+                )
 
-    def _get_auto_scale(self):
-        print "WARNING: Scaling not completely implemented yet."
-        return np.array([
-            1/(f*self.exposure).max() for f in self.flux
-            ])
-
-    def set_constraints(self, constraints):
-        """Set Gaussian constraints on flux components.
-
-        List of constraints will be interpreted as 1-sigma errors.  Special
-        list item values:
-        - Zero means that the component is fixed.
-        - None or inf means that the component is unconstrained.
-
-        Note: constrains = None means that no constrants are applies.
-
-        Arguments
-        ---------
-        constraints : {None, list, 1-D array}
-        """
-        print "WARNING: Constraints not completely implemented yet."
-        assert constraints is None or len(constraints) == self.ncomp
-        if constraints is not None:
-            errors = np.array([
-                    np.inf if x is None or x == np.inf else x for x in constraints
-                    ])
-            fixed = np.array([x == 0. for x in constraints])
-            self.errors = errors
-            self.fixed = fixed
-        else:
-            self.errors = np.ones(self.ncomp)*np.inf
-            self.fixed = np.zeros(self.ncomp, dtype='bool')
-        return self
+#    @staticmethod
+#    def _get_constraints(constraints, ncomp):
+#        assert constraints is None or len(constraints) == ncomp
+#        if constraints is not None:
+#            print "WARNING: Constraints not completely implemented yet."
+#            constraints = np.array(
+#                [np.inf if x is None or x == np.inf else x for x in constraints]
+#                )
+#            if any(constraints<=0.):
+#                raise ValueError("Constraints must be positive or None.")
+#        else:
+#            constraints = np.ones(ncomp)*np.inf
+#        return constraints
 
     def _summedNoise(self, thetas = None):
         noise_tot = self.noise*1.  # Make copy
@@ -288,20 +276,20 @@ class Swordfish(object):  # Everything is flux!
 
     # Likelihood with systematics
     def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-6, derivative = False):
-        """Return likelihood function.
+        """Return likelihood function, assuming Asimov data.
 
         Arguments
         ---------
         thetas : array-like, optional
             Definition of flux (added to noise during evaluation).
         thetas0 : array-like, optional
-            Definition of mock data.
+            Definition of Asimov data.
         dmu : array-like
             Systematic deviation.
         epsilon : Float
-            Magnitude of identity matrix added to Sigma for stable matrix
-            inversion.  Should be smaller than statistical noise to not affect
-            the result.
+            Diagonal elements of identity matrix that is added to Sigma for
+            stable matrix inversion.  Must be negligible w.r.t. statistical
+            variance in order to not affect the result.
         """
         mu0 = self._summedNoise(thetas0)*self.exposure
         mu =  self._summedNoise(thetas)*self.exposure
@@ -467,31 +455,31 @@ class EffectiveCounts(object):
         raise NotImplemented()
 
 
-## For later
-
-class Visualization(object):
-    def __init__(self, xy, I11, I22, I12):
-        pass
-
-    def plot(self):
-        pass
-
-    def integrate(self):
-        pass
-
-def tensorproduct(Sigma1, Sigma2):
-    Sigma1 = la.aslinearoperator(Sigma1)
-    Sigma2 = la.aslinearoperator(Sigma2)
-    n1 = np.shape(Sigma1)[0]
-    n2 = np.shape(Sigma2)[0]
-    Sigma2 = Sigma2(np.eye(n2))
-    N = n1*n2
-    def Sigma(x):
-        A = np.reshape(x, (n1, n2))
-        B = np.zeros_like(A)
-        for i in range(n2):
-            y = Sigma1(A[:,i])
-            for j in range(n2):
-                B[:,j] += Sigma2[i,j]*y
-        return np.reshape(B, N)
-    return la.LinearOperator((N, N), matvec = lambda x: Sigma(x))
+### Obsolete
+#
+#class Visualization(object):
+#    def __init__(self, xy, I11, I22, I12):
+#        pass
+#
+#    def plot(self):
+#        pass
+#
+#    def integrate(self):
+#        pass
+#
+#def tensorproduct(Sigma1, Sigma2):
+#    Sigma1 = la.aslinearoperator(Sigma1)
+#    Sigma2 = la.aslinearoperator(Sigma2)
+#    n1 = np.shape(Sigma1)[0]
+#    n2 = np.shape(Sigma2)[0]
+#    Sigma2 = Sigma2(np.eye(n2))
+#    N = n1*n2
+#    def Sigma(x):
+#        A = np.reshape(x, (n1, n2))
+#        B = np.zeros_like(A)
+#        for i in range(n2):
+#            y = Sigma1(A[:,i])
+#            for j in range(n2):
+#                B[:,j] += Sigma2[i,j]*y
+#        return np.reshape(B, N)
+#    return la.LinearOperator((N, N), matvec = lambda x: Sigma(x))
