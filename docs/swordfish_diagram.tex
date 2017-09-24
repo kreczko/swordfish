@@ -49,12 +49,12 @@
    ] (MODEL) 
  {
   \textbf{Poisson Point Process}\\
-      $I(\Omega|\btheta)$: Intensity\\
-      $N(\Omega)$: Statistical error\\
-      $\Sigma(\Omega, \Omega')$: Systematic error\\
+      $I(\Omega|\btheta)$: Model intensity\\
+      $N(\Omega)$: Statistical noise\\
+      $\Sigma(\Omega, \Omega')$: Systematic covariance\\
       $\mathcal{E}(\Omega)$: Exposure
  };
-  
+
  % State: ACK with different content
  \node[state,    	% layout (defined above)
 %  text width=3cm, 	% max text width
@@ -68,6 +68,21 @@
    ${\color{red}\mathcal{I}_{ij}(\btheta)} = -\left\langle \frac{\ln\mathcal{L}(\mathcal{D}|\btheta)}{\partial \theta_i \theta_j}
    \right\rangle_{\mathcal{D}(\btheta)}$
  };
+
+
+% \node[state, align=center, above of=INFO, node distance=2cm] (EQN)
+%   {%
+%     $\begin{aligned}\mathcal{L}(\{\Omega_i\}|\btheta,\delta \mu) = \frac{e^{-\int\!d\Omega\,\left(\mu(\Omega|\btheta)+\delta\mu(\Omega)\right)}\prod_{i=1}^{N}
+%       \left(\mu(\Omega_i|\btheta)+\delta\mu(\Omega_i)\right)}{N!}
+%      +\frac{1}{2}\int d\Omega d\Omega' 
+%      \delta\mu(\Omega)\Sigma^{-1}(\Omega, \Omega')
+%      \delta\mu(\Omega')
+%    \end{aligned}$\\
+%     $\begin{aligned}
+%       \mu(\Omega|\btheta) = \left(I(\Omega|\btheta) + N(\Omega)\right)\mathcal{E}(\Omega)
+%    \end{aligned}$
+%    };
+  
  
  % STATE EPC
  \node[state,
@@ -105,12 +120,14 @@
 ] (FLUX) 
  {%
    \textbf{Information Flux}\\
-   $\mathcal{I}(\btheta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\color{red}\mathcal{F}(\Omega|\btheta)_{ij}$
+%   $\mathcal{I}(\btheta)_{ij} = \int dt\int d\Omega \frac{d\mathcal{E}(\Omega)}{dt}\color{red}\mathcal{F}(\Omega|\btheta)_{ij}$\\
+   ${\color{red}\mathcal{F}(\Omega|\btheta)_{ij}} = \frac{\delta \mathcal{I}(\btheta)_{ij}}{\delta \mathcal{E}(\Omega)}$
  };
 
- \node[state, below of=FLUX, node distance=1.5cm] (EXP)
+ \node[state, align=center, below of=FLUX, node distance=1.5cm] (EXP)
  {%
-   \textbf{Optimal observation strategy}
+   \textbf{Strategy optimization \&}\\
+   \textbf{experimental design}
  };
 
  \node[state, below left of=INFO,
@@ -122,7 +139,7 @@
 ] (COUNTS) 
  {%
    \textbf{Effective Counts}\\
-   $\mathcal{I}_{ij}(\btheta) \to \color{red}\left(s_i(\btheta), b_i(\btheta)\right)$
+   $\mathcal{I}(\btheta) \to \color{red}\left(s_i(\btheta), b_i(\btheta)\right)$
  };
 
  \node[state, below of=COUNTS,
@@ -167,7 +184,9 @@
 \path (MODEL) edge (INFO);
 \path (INFO) edge (GEO);
 \path (INFO) edge[bend left=0]  (FLUX);
-\path (INFO) edge[bend right=0] node[rotate=33, anchor=south]{Additive components} (COUNTS);
+\path (INFO) edge[bend right=0] 
+  node[rotate=33, anchor=south]{Additive component} 
+  (COUNTS);
 \path (COUNTS) edge (LIMITS);
 \path (COUNTS) edge (REACH);
 \path (COUNTS) edge (LIKE);
