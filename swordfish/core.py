@@ -154,7 +154,7 @@ class Swordfish(object):  # Everything is flux!
                 noise_tot += thetas[i]*self.flux[i]
         return noise_tot
 
-    def _solveD(self, thetas = None, psi = 1.):
+    def _solveD(self, thetas = None):
         """
         Calculates:
             N = noise + thetas*flux
@@ -167,7 +167,7 @@ class Swordfish(object):  # Everything is flux!
             x, noise, exposure
         """
         noise = self._summedNoise(thetas)
-        exposure = self.exposure*psi
+        exposure = self.exposure
         spexp = la.aslinearoperator(sp.diags(exposure))
         D = (
                 la.aslinearoperator(sp.diags(noise*exposure))
@@ -192,7 +192,7 @@ class Swordfish(object):  # Everything is flux!
             raise KeyError("Solver unknown.")
         return x, noise, exposure
 
-    def fishermatrix(self, thetas = None, psi = 1.):
+    def fishermatrix(self, thetas = None):
         """Return Fisher Information Matrix.
 
         Arguments
@@ -200,7 +200,7 @@ class Swordfish(object):  # Everything is flux!
         thetas : array-like, optional
             Flux components added to noise during evaluation.
         """
-        x, noise, exposure = self._solveD(thetas=thetas, psi=psi)
+        x, noise, exposure = self._solveD(thetas=thetas)
         I = np.zeros((self.ncomp,self.ncomp))
         for i in range(self.ncomp):
             for j in range(i+1):
@@ -209,7 +209,7 @@ class Swordfish(object):  # Everything is flux!
                 I[j,i] = tmp
         return I
 
-    def infoflux(self, thetas = None, psi = 1.):
+    def infoflux(self, thetas = None):
         """Return Fisher Information Flux.
 
         Arguments
@@ -217,7 +217,7 @@ class Swordfish(object):  # Everything is flux!
         thetas : array-like, optional
             Flux components added to noise during evaluation.
         """
-        x, noise, exposure = self._solveD(thetas=thetas, psi=psi)
+        x, noise, exposure = self._solveD(thetas=thetas)
 
         F = np.zeros((self.ncomp,self.ncomp,self.nbins))
         for i in range(self.ncomp):
@@ -380,7 +380,7 @@ class EffectiveCounts(object):
         """
         return sum(self.model.flux[i]*self.model.exposure*theta)
 
-    def effectivecounts(self, i, theta, psi = 1.):
+    def effectivecounts(self, i, theta):
         """Return effective counts.
 
         Parameters
@@ -397,17 +397,17 @@ class EffectiveCounts(object):
         b : float
             Effective backgroundc counts.
         """
-        I0 = self.model.effectivefishermatrix(i, psi = psi)
+        I0 = self.model.effectivefishermatrix(i)
         thetas = np.zeros(self.model.ncomp)
         thetas[i] = theta
-        I = self.model.effectivefishermatrix(i, thetas = thetas, psi = psi)
+        I = self.model.effectivefishermatrix(i, thetas = thetas)
         if I0 == I:
             return 0., None
         s = 1/(1/I-1/I0)*theta**2
         b = 1/I0/(1/I-1/I0)**2*theta**2
         return s, b
 
-    def upperlimit(self, alpha, i, psi = 1., gaussian = False):
+    def upperlimit(self, alpha, i, gaussian = False):
         """Returns upper limits, based on effective counts method.
 
         Parameters
@@ -425,14 +425,14 @@ class EffectiveCounts(object):
             Predicted upper limit on component i.
         """
         Z = 2.64  # FIXME
-        I0 = self.model.effectivefishermatrix(i, psi = psi)
+        I0 = self.model.effectivefishermatrix(i)
         if gaussian:
             return Z/np.sqrt(I0)
         else:
             thetas = np.zeros(self.model.ncomp)
             thetaUL_est = Z/np.sqrt(I0)  # Gaussian estimate
             thetas[i] = thetaUL_est
-            I = self.model.effectivefishermatrix(i, thetas = thetas, psi = psi)
+            I = self.model.effectivefishermatrix(i, thetas = thetas)
             if (I0-I)<0.02*I:  # 1% accuracy of limits
                 thetaUL = thetaUL_est
             else:
@@ -440,7 +440,7 @@ class EffectiveCounts(object):
                 theta_list = [thetaUL_est]
                 while True:
                     theta = theta_list[-1]
-                    s, b = self.effectivecounts(i, theta = theta, psi = psi)
+                    s, b = self.effectivecounts(i, theta = theta)
                     if s == 0: b = 1.
                     z_list.append(s/np.sqrt(s+b))
                     if z_list[-1] > Z:
@@ -451,7 +451,7 @@ class EffectiveCounts(object):
                 thetaUL = np.interp(Z, z_list, theta_list)
             return thetaUL
 
-    def discoveryreach(self, alpha, i, psi = 1., gaussian = False):
+    def discoveryreach(self, alpha, i, gaussian = False):
         raise NotImplemented()
 
 
