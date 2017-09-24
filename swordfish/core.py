@@ -275,7 +275,7 @@ class Swordfish(object):  # Everything is flux!
         return eff_F
 
     # Likelihood with systematics
-    def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-6, derivative = False):
+    def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-2, derivative = False):
         """Return likelihood function, assuming Asimov data.
 
         Arguments
@@ -287,9 +287,10 @@ class Swordfish(object):  # Everything is flux!
         dmu : array-like
             Systematic deviation.
         epsilon : Float
-            Diagonal elements of identity matrix that is added to Sigma for
-            stable matrix inversion.  Must be negligible w.r.t. statistical
-            variance in order to not affect the result.
+            Fraction of diagonal noise added to Sigma for stable matrix
+            inversion.  Default is 1e-2.
+        derivative: bool
+            Return also partial derivative w.r.t. thetas and w.r.t. dmu
         """
         mu0 = self._summedNoise(thetas0)*self.exposure
         mu =  self._summedNoise(thetas)*self.exposure
@@ -300,7 +301,8 @@ class Swordfish(object):  # Everything is flux!
         lnL = (mu0*np.log(mu)-mu-gammaln(mu0+1)).sum()
         if self.sysflag:
             dense = self.systematics(np.eye(self.nbins))
-            invS = np.linalg.linalg.inv(dense+np.eye(self.nbins)*epsilon)
+            #invS = np.linalg.linalg.inv(dense+np.eye(self.nbins)*epsilon)
+            invS = np.linalg.linalg.inv(dense+np.diag(mu0)*epsilon)
             lnL -= 0.5*(invS.dot(dmu)*dmu).sum()
         if derivative:
             dlnL_dtheta = (mu0/mu*self.flux*self.exposure-self.flux*self.exposure).sum(axis=1)
@@ -312,13 +314,12 @@ class Swordfish(object):  # Everything is flux!
         else:
             return lnL
 
-    def profile_lnL(self, thetas, thetas0, epsilon = 1e-6,
-            free_thetas = None):
+    def profile_lnL(self, thetas, thetas0, epsilon = 1e-2, free_thetas = None):
         """Return profile likelihood.
 
         Arguments
         ---------
-        fix_thetas : array-like, boolean
+        free_thetas : array-like, boolean
             Parameters kept fixed during maximization
         """
         if free_thetas is None:
