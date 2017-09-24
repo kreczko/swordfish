@@ -110,22 +110,22 @@ class Swordfish(object):  # Everything is flux!
         solver : {'direct', 'cg'}, optional
         verbose : bool, optional
         """
-        self.flux = flux
-        self.noise = noise
-        self.exposure = exposure
-        self.cache = None
-        self.verbose = verbose
-        self.scale = self._get_auto_scale(flux, exposure)
-        self.solver = solver
-        self.nbins = len(self.noise)  # Number of bins
-        self.ncomp = len(self.flux)   # Number of flux components
-        self.sysflag = systematics is not None
+        self._flux = flux
+        self._noise = noise
+        self._exposure = exposure
+        self._cache = None
+        self._verbose = verbose
+        self._scale = self._get_auto_scale(flux, exposure)
+        self._solver = solver
+        self._nbins = len(self._noise)  # Number of bins
+        self._ncomp = len(self._flux)   # Number of flux components
+        self._sysflag = systematics is not None
         if systematics is not None:
-            self.systematics = la.aslinearoperator(systematics)
+            self._systematics = la.aslinearoperator(systematics)
         else:
-            self.systematics = la.LinearOperator((self.nbins, self.nbins), 
+            self._systematics = la.LinearOperator((self._nbins, self._nbins), 
                     matvec = lambda x: np.zeros_like(x))
-#        self.constraints = self._get_constraints(constraints, self.ncomp)
+#        self._constraints = self._get_constraints(constraints, self._ncomp)
 
     @staticmethod
     def _get_auto_scale(flux, exposure):
@@ -148,10 +148,10 @@ class Swordfish(object):  # Everything is flux!
 #        return constraints
 
     def _summedNoise(self, thetas = None):
-        noise_tot = self.noise*1.  # Make copy
+        noise_tot = self._noise*1.  # Make copy
         if thetas is not None: 
-            for i in range(max(self.ncomp, len(thetas))):
-                noise_tot += thetas[i]*self.flux[i]
+            for i in range(max(self._ncomp, len(thetas))):
+                noise_tot += thetas[i]*self._flux[i]
         return noise_tot
 
     def _solveD(self, thetas = None):
@@ -167,27 +167,27 @@ class Swordfish(object):  # Everything is flux!
             x, noise, exposure
         """
         noise = self._summedNoise(thetas)
-        exposure = self.exposure
+        exposure = self._exposure
         spexp = la.aslinearoperator(sp.diags(exposure))
         D = (
                 la.aslinearoperator(sp.diags(noise*exposure))
-                + spexp*self.systematics*spexp
+                + spexp*self._systematics*spexp
                 )
-        x = np.zeros((self.ncomp, self.nbins))
-        if self.solver == "direct":
-            dense = D(np.eye(self.nbins))
+        x = np.zeros((self._ncomp, self._nbins))
+        if self._solver == "direct":
+            dense = D(np.eye(self._nbins))
             invD = np.linalg.linalg.inv(dense)
-            for i in range(self.ncomp):
-                x[i] = np.dot(invD, self.flux[i]*exposure)*exposure
-        elif self.solver == "cg":
+            for i in range(self._ncomp):
+                x[i] = np.dot(invD, self._flux[i]*exposure)*exposure
+        elif self._solver == "cg":
             def callback(x):
-                if self.verbose:
+                if self._verbose:
                     print len(x), sum(x), np.mean(x)
-            for i in range(self.ncomp):
-                x0 = self.flux[i]/noise if self.cache is None else self.cache/exposure
-                x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-3)[0]
+            for i in range(self._ncomp):
+                x0 = self._flux[i]/noise if self._cache is None else self._cache/exposure
+                x[i] = la.cg(D, self._flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-3)[0]
                 x[i] *= exposure
-                self.cache= x[i]
+                self._cache= x[i]
         else:
             raise KeyError("Solver unknown.")
         return x, noise, exposure
@@ -201,10 +201,10 @@ class Swordfish(object):  # Everything is flux!
             Flux components added to noise during evaluation.
         """
         x, noise, exposure = self._solveD(thetas=thetas)
-        I = np.zeros((self.ncomp,self.ncomp))
-        for i in range(self.ncomp):
+        I = np.zeros((self._ncomp,self._ncomp))
+        for i in range(self._ncomp):
             for j in range(i+1):
-                tmp = sum(self.flux[i]*x[j])
+                tmp = sum(self._flux[i]*x[j])
                 I[i,j] = tmp
                 I[j,i] = tmp
         return I
@@ -219,8 +219,8 @@ class Swordfish(object):  # Everything is flux!
         """
         x, noise, exposure = self._solveD(thetas=thetas)
 
-        F = np.zeros((self.ncomp,self.ncomp,self.nbins))
-        for i in range(self.ncomp):
+        F = np.zeros((self._ncomp,self._ncomp,self._nbins))
+        for i in range(self._ncomp):
             for j in range(i+1):
                 tmp = x[i]*x[j]*noise/(exposure**2.)
                 F[i,j] = tmp
@@ -253,7 +253,7 @@ class Swordfish(object):  # Everything is flux!
         """
         F = self.infoflux(**kwargs)
         I = self.fishermatrix(**kwargs)
-        n = self.ncomp
+        n = self._ncomp
         if n == 1:
             return F[i,i]
         indices = np.setdiff1d(range(n), i)
@@ -292,21 +292,21 @@ class Swordfish(object):  # Everything is flux!
         derivative: bool
             Return also partial derivative w.r.t. thetas and w.r.t. dmu
         """
-        mu0 = self._summedNoise(thetas0)*self.exposure
-        mu =  self._summedNoise(thetas)*self.exposure
+        mu0 = self._summedNoise(thetas0)*self._exposure
+        mu =  self._summedNoise(thetas)*self._exposure
         if dmu is None:
-            dmu = np.zeros_like(self.exposure)
-        if self.sysflag:
+            dmu = np.zeros_like(self._exposure)
+        if self._sysflag:
             mu += dmu
         lnL = (mu0*np.log(mu)-mu-gammaln(mu0+1)).sum()
-        if self.sysflag:
-            dense = self.systematics(np.eye(self.nbins))
-            #invS = np.linalg.linalg.inv(dense+np.eye(self.nbins)*epsilon)
+        if self._sysflag:
+            dense = self._systematics(np.eye(self._nbins))
+            #invS = np.linalg.linalg.inv(dense+np.eye(self._nbins)*epsilon)
             invS = np.linalg.linalg.inv(dense+np.diag(mu0)*epsilon)
             lnL -= 0.5*(invS.dot(dmu)*dmu).sum()
         if derivative:
-            dlnL_dtheta = (mu0/mu*self.flux*self.exposure-self.flux*self.exposure).sum(axis=1)
-            if self.sysflag:
+            dlnL_dtheta = (mu0/mu*self._flux*self._exposure-self._flux*self._exposure).sum(axis=1)
+            if self._sysflag:
                 dlnL_dmu = mu0/mu - 1. - invS.dot(dmu)
             else:
                 dlnL_dmu = None
@@ -325,7 +325,7 @@ class Swordfish(object):  # Everything is flux!
         if free_thetas is None:
             free_thetas = np.zeros(len(thetas), dtype='bool')
         Nfree_thetas = (free_thetas).sum()
-        Nsyst = len(self.exposure) if self.sysflag else 0
+        Nsyst = len(self._exposure) if self._sysflag else 0
         thetas = thetas.copy()
         N = Nfree_thetas + Nsyst
         x0 = np.zeros(N)
@@ -362,7 +362,7 @@ class EffectiveCounts(object):
         Note: The functionality applies *only* to additive component models.
         You have been warned.
         """
-        self.model = model
+        self._model = model
 
     def counts(self, i, theta):
         """Return total counts.
@@ -379,7 +379,7 @@ class EffectiveCounts(object):
         lambda : float
             Number of counts in component i.
         """
-        return sum(self.model.flux[i]*self.model.exposure*theta)
+        return sum(self._model._flux[i]*self._model._exposure*theta)
 
     def effectivecounts(self, i, theta):
         """Return effective counts.
@@ -398,10 +398,10 @@ class EffectiveCounts(object):
         b : float
             Effective backgroundc counts.
         """
-        I0 = self.model.effectivefishermatrix(i)
-        thetas = np.zeros(self.model.ncomp)
+        I0 = self._model.effectivefishermatrix(i)
+        thetas = np.zeros(self._model._ncomp)
         thetas[i] = theta
-        I = self.model.effectivefishermatrix(i, thetas = thetas)
+        I = self._model.effectivefishermatrix(i, thetas = thetas)
         if I0 == I:
             return 0., None
         s = 1/(1/I-1/I0)*theta**2
@@ -426,14 +426,14 @@ class EffectiveCounts(object):
             Predicted upper limit on component i.
         """
         Z = 2.64  # FIXME
-        I0 = self.model.effectivefishermatrix(i)
+        I0 = self._model.effectivefishermatrix(i)
         if gaussian:
             return Z/np.sqrt(I0)
         else:
-            thetas = np.zeros(self.model.ncomp)
+            thetas = np.zeros(self._model._ncomp)
             thetaUL_est = Z/np.sqrt(I0)  # Gaussian estimate
             thetas[i] = thetaUL_est
-            I = self.model.effectivefishermatrix(i, thetas = thetas)
+            I = self._model.effectivefishermatrix(i, thetas = thetas)
             if (I0-I)<0.02*I:  # 1% accuracy of limits
                 thetaUL = thetaUL_est
             else:
