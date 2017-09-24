@@ -45,7 +45,7 @@ class harpix_Sigma(la.LinearOperator):
                         alm *= G
                         b[:,i] = hp.alm2map(alm, nside, verbose = False)
                 else:
-                    alm = hp.map2alm(z, iter = 0)  # Older but faster routine
+                    alm = 1e30*hp.map2alm(z/1e30, iter = 0)  # Older but faster routine
                     alm *= G
                     b = hp.alm2map(alm, nside, verbose = False)
                 return harp.trans_data(T.T, b)
