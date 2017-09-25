@@ -11,5 +11,5 @@ Python 2.7
 ## How to Install
 
 ````PYTHON
-python setup.py
+python setup.py install
 ````
