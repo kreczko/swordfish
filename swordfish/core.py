@@ -9,14 +9,6 @@ import copy
 from scipy.special import gammaln
 from scipy.optimize import fmin_l_bfgs_b
 
-# - How to get error bands
-# - How to marginalize or profile over non-Gaussian uncertainties
-# - Options:
-#   - All Frequentist
-#   - All Bayesian
-#   - Mixed
-# TODO: Implement constraints
-
 def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
     """Initialize minuit using no-nonsense interface."""
     import iminuit
