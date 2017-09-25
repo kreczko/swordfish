@@ -5,6 +5,7 @@ from __future__ import division
 import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
+from scipy import stats
 import copy
 from scipy.special import gammaln
 from scipy.optimize import fmin_l_bfgs_b
@@ -129,7 +130,6 @@ class Swordfish(object):  # Everything is flux!
     def _get_constraints(constraints, ncomp):
         assert constraints is None or len(constraints) == ncomp
         if constraints is not None:
-            print "WARNING: Constraints not completely implemented yet."
             constraints = np.array(
                 [np.inf if x is None or x == np.inf else x for x in constraints]
                 )
@@ -473,7 +473,7 @@ class EffectiveCounts(object):
         thetaUL : float
             Predicted upper limit on component i.
         """
-        Z = 2.64  # FIXME
+        Z = stats.norm.isf(alpha)
         I0 = 1./self._model.variance(i)
         if gaussian:
             return Z/np.sqrt(I0)
@@ -501,8 +501,29 @@ class EffectiveCounts(object):
             return thetaUL
 
     def discoveryreach(self, alpha, i, gaussian = False):
-        raise NotImplemented()
+        Z = stats.norm.isf(alpha)
+        var0 = self._model.variance(i)
+        if gaussian:  # Gaussian approximation
+            return Z*var0**0.5
 
+        thetas = np.zeros(self._model._ncomp)
+        thetaDT_est = Z*np.sqrt(var0)  # Gaussian approx. as starting point
+        thetas[i] = thetaDT_est
+        var = self._model.variance(i, thetas = thetas)
+        if abs(var0 - var) < 0.02*var:  # Still Gaussian enough
+            return Z*var0**0.5
+        z_list = []
+        theta_list = [thetaDT_est]
+        while True:
+            theta = theta_list[-1]
+            s, b = self.effectivecounts(i, theta = theta)
+            if s == 0: b = 1.
+            z_list.append((s+b)*np.log((s+b)/b)-s)
+            if z_list[-1] > Z**2/2:
+                break
+            else:
+                theta_list.append(theta*1.3)
+        return np.interp(Z**2/2, z_list, theta_list)
 
 ### Obsolete
 #
