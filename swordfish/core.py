@@ -9,10 +9,16 @@ from scipy import stats
 import copy
 from scipy.special import gammaln
 from scipy.optimize import fmin_l_bfgs_b
+import metricplot as mp
 
 def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
     """Initialize minuit using no-nonsense interface."""
-    import iminuit
+    try:
+        import iminuit
+    except ImportError:
+        raise ImportError(
+                "This function requires that the module iminuit is installed.")
+
     N = len(x)
     if x_err is not None:
         assert len(x_err) == N
@@ -20,7 +26,7 @@ def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef
         assert len(x_lim) == N
     if x_fix is not None:
         assert len(x_fix) == N
-    varnames = ["x"+str(i) for i in range(1,N+1)]
+    varnames = ["x"+str(i) for i in range(N)]
     def wf(*args):
         x = np.array(args)
         return f(x)
@@ -86,6 +92,54 @@ def func_to_templates(flux, x, dx = None):
         df = (flux(*xU) - flux(*xL))/2./dx[i]
         fluxes.append(df)
     return fluxes
+
+class FunkFish(object):
+    """Docstring for FunkFish"""
+    def __init__(self, f, Sigma, exposure, x0, constraints = None):
+        self._f = f
+        self._Sigma = Sigma
+        self._exposure = exposure
+        self._x0 = np.array(x0, dtype='float64')
+        self._constraints = constraints
+
+    def _get_x0(self, x0_dict = {}):
+        """Get updated x0."""
+        x0 = self._x0.copy()
+        for i in x0_dict:
+            x0[i] = x0_dict[i]
+        return x0
+
+    def get_Swordfish(self, x0_dict = {}):
+        x0 = self._get_x0(x0_dict)
+        flux = func_to_templates(self._f, x0)
+        noise = self._f(*x0)
+        return Swordfish(flux, noise, self._Sigma, self._exposure, constraints
+                = self._constraints)
+
+    def get_EffectiveCounts(self, x0_dict = {}):
+        SF = self.get_Swordfish(x0_dict)
+        return EffectiveCounts(SF)
+
+    def get_TensorFields(self, i_x, i_y, x_bins, y_bins, x0_dict = {}):
+        x0_dict = x0_dict.copy()
+        g = np.zeros((len(y_bins), len(x_bins), 2, 2))
+        for i, y in enumerate(y_bins):
+            for j, x in enumerate(x_bins):
+                x0_dict[i_x] = x
+                x0_dict[i_y] = y
+                SF = self.get_Swordfish(x0_dict)
+                g[i, j] = SF.effectivefishermatrix((i_x, i_y))
+        return mp.TensorField(x_bins, y_bins, g)
+
+    def get_iminuit(self, x0_dict = {}):
+        SF = self.get_Swordfish(x0_dict)
+        x0 = self._get_x0(x0_dict)
+        def chi2(x):
+            lnL = SF.profile_lnL(x-x0, x0*0.)
+            return -2*lnL
+        x0err = np.where(x0>0., x0*0.01, 0.01)
+        M = _init_minuit(chi2, x = x0, x_err = x0err)
+        return M
 
 class Swordfish(object):  # Everything is flux!
     """Swordfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
@@ -292,7 +346,7 @@ class Swordfish(object):  # Everything is flux!
         return eff_F
 
     # Likelihood with systematics
-    def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-2, derivative = False):
+    def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-3, derivative = False):
         """Return likelihood function, assuming Asimov data.
 
         Arguments
@@ -319,6 +373,7 @@ class Swordfish(object):  # Everything is flux!
         self._at_bound = any(mu<mu0*1e-6)
         mu = np.where(mu<mu0*1e-6, mu0*1e-6, mu)
         lnL = (mu0*np.log(mu)-mu-gammaln(mu0+1)).sum()
+        lnL -= (0.5*thetas**2/self._constraints**2).sum()
         if self._sysflag:
             dense = self._systematics(np.eye(self._nbins))
             #invS = np.linalg.linalg.inv(dense+np.eye(self._nbins)*epsilon)
@@ -326,6 +381,7 @@ class Swordfish(object):  # Everything is flux!
             lnL -= 0.5*(invS.dot(dmu)*dmu).sum()
         if derivative:
             dlnL_dtheta = (mu0/mu*self._flux*self._exposure-self._flux*self._exposure).sum(axis=1)
+            dlnL_dtheta -= thetas/self._constraints**2
             if self._sysflag:
                 dlnL_dmu = mu0/mu*self._exposure - self._exposure - invS.dot(dmu)
             else:
@@ -334,7 +390,7 @@ class Swordfish(object):  # Everything is flux!
         else:
             return lnL
 
-    def profile_lnL(self, thetas, thetas0, epsilon = 1e-2, free_thetas = None):
+    def profile_lnL(self, thetas, thetas0, epsilon = 1e-3, free_thetas = None):
         """Return profile likelihood.
 
         Arguments
