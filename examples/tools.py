@@ -4,7 +4,7 @@
 from __future__ import division
 import healpy as hp
 import numpy as np
-import harpix as harp
+import HARPix as harp
 from scipy.sparse import linalg as la
 import swordfish as sf
 from scipy.integrate import quad
