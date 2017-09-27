@@ -5,14 +5,20 @@ from __future__ import division
 import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
+from scipy import stats
 import copy
 from scipy.special import gammaln
 from scipy.optimize import fmin_l_bfgs_b
-
+import metricplot as mp
 
 def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
-    """Initialize minuit using non-nonsense interface."""
-    import iminuit
+    """Initialize minuit using no-nonsense interface."""
+    try:
+        import iminuit
+    except ImportError:
+        raise ImportError(
+                "This function requires that the module iminuit is installed.")
+
     N = len(x)
     if x_err is not None:
         assert len(x_err) == N
@@ -20,7 +26,7 @@ def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef
         assert len(x_lim) == N
     if x_fix is not None:
         assert len(x_fix) == N
-    varnames = ["x"+str(i) for i in range(1,N+1)]
+    varnames = ["x"+str(i) for i in range(N)]
     def wf(*args):
         x = np.array(args)
         return f(x)
@@ -34,7 +40,6 @@ def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef
             kwargs["fix_"+var] = x_fix[i]
     return iminuit.Minuit(wf, forced_parameters = varnames, errordef =
             errordef, **kwargs)
-
 
 def get_minuit(flux, noise, exposure, thetas0, thetas0_err, **kwargs):
     """Create iminuit.Minuit object from input data.
@@ -76,7 +81,7 @@ def func_to_templates(flux, x, dx = None):
     """Return finite differences for use in SwordFish."""
     x = np.array(x, dtype='float64')
     if dx is None:
-        dx = x*0.01
+        dx = x*0.01+0.001
     fluxes = []
     #fluxes.append(flux(*x))
     for i in range(len(x)):
@@ -88,11 +93,59 @@ def func_to_templates(flux, x, dx = None):
         fluxes.append(df)
     return fluxes
 
+class FunkFish(object):
+    """Docstring for FunkFish"""
+    def __init__(self, f, Sigma, exposure, x0, constraints = None):
+        self._f = f
+        self._Sigma = Sigma
+        self._exposure = exposure
+        self._x0 = np.array(x0, dtype='float64')
+        self._constraints = constraints
+
+    def _get_x0(self, x0_dict = {}):
+        """Get updated x0."""
+        x0 = self._x0.copy()
+        for i in x0_dict:
+            x0[i] = x0_dict[i]
+        return x0
+
+    def get_Swordfish(self, x0_dict = {}):
+        x0 = self._get_x0(x0_dict)
+        flux = func_to_templates(self._f, x0)
+        noise = self._f(*x0)
+        return Swordfish(flux, noise, self._Sigma, self._exposure, constraints
+                = self._constraints)
+
+    def get_EffectiveCounts(self, x0_dict = {}):
+        SF = self.get_Swordfish(x0_dict)
+        return EffectiveCounts(SF)
+
+    def get_TensorFields(self, i_x, i_y, x_bins, y_bins, x0_dict = {}):
+        x0_dict = x0_dict.copy()
+        g = np.zeros((len(y_bins), len(x_bins), 2, 2))
+        for i, y in enumerate(y_bins):
+            for j, x in enumerate(x_bins):
+                x0_dict[i_x] = x
+                x0_dict[i_y] = y
+                SF = self.get_Swordfish(x0_dict)
+                g[i, j] = SF.effectivefishermatrix((i_x, i_y))
+        return mp.TensorField(x_bins, y_bins, g)
+
+    def get_iminuit(self, x0_dict = {}):
+        SF = self.get_Swordfish(x0_dict)
+        x0 = self._get_x0(x0_dict)
+        def chi2(x):
+            lnL = SF.profile_lnL(x-x0, x0*0.)
+            return -2*lnL
+        x0err = np.where(x0>0., x0*0.01, 0.01)
+        M = _init_minuit(chi2, x = x0, x_err = x0err)
+        return M
+
 class Swordfish(object):  # Everything is flux!
     """Swordfish(flux, noise, systematics, exposure, solver = 'direct', verbose = False)
     """
-    def __init__(self, flux, noise, systematics, exposure, solver = 'direct',
-            verbose = False, constraints = None, scale = 'auto'):
+    def __init__(self, flux, noise, systematics, exposure, constraints = None, solver = 'direct',
+            verbose = False):
         """Construct swordfish model from input.
 
         Arguments
@@ -103,108 +156,89 @@ class Swordfish(object):  # Everything is flux!
         exposure : {float, 1-D array}
         solver : {'direct', 'cg'}, optional
         verbose : bool, optional
-        constraints : 1-D array, optional
-        scale : {1-D array, 'auto'}
         """
-        self.flux = flux
-        self.noise = noise
-        self.exposure = exposure
-        self.cache = None
-        self.verbose = verbose
-        self.scale = self._get_auto_scale() if scale == 'auto' else scale
-
-        self.solver = solver
-        self.nbins = len(self.noise)  # Number of bins
-        self.ncomp = len(self.flux)   # Number of flux components
-        self.sysflag = systematics is not None
+        self._flux = flux
+        self._noise = noise
+        self._exposure = exposure
+        self._cache = None
+        self._verbose = verbose
+        self._scale = self._get_auto_scale(flux, exposure)
+        self._solver = solver
+        self._nbins = len(self._noise)  # Number of bins
+        self._ncomp = len(self._flux)   # Number of flux components
+        self._sysflag = systematics is not None
         if systematics is not None:
-            self.systematics = la.aslinearoperator(systematics)
+            self._systematics = la.aslinearoperator(systematics)
         else:
-            self.systematics = la.LinearOperator(
-                    (self.nbins, self.nbins), matvec = lambda x: x*0.)
+            self._systematics = la.LinearOperator((self._nbins, self._nbins), 
+                    matvec = lambda x: np.zeros_like(x))
+        self._constraints = self._get_constraints(constraints, self._ncomp)
 
-        self.set_constraints(constraints)  # sets self.errors and self.fixed
+    @staticmethod
+    def _get_auto_scale(flux, exposure):
+        return np.array(
+                [1./(f*exposure).max() for f in flux]
+                )
 
-    def _get_auto_scale(self):
-        print "WARNING: Scaling not completely implemented yet."
-        return np.array([
-            1/(f*self.exposure).max() for f in self.flux
-            ])
-
-    def set_constraints(self, constraints):
-        """Set Gaussian constraints on flux components.
-
-        List of constraints will be interpreted as 1-sigma errors.  Special
-        list item values:
-        - Zero means that the component is fixed.
-        - None or inf means that the component is unconstrained.
-
-        Note: constrains = None means that no constrants are applies.
-
-        Arguments
-        ---------
-        constraints : {None, list, 1-D array}
-        """
-        print "WARNING: Constraints not completely implemented yet."
-        assert constraints is None or len(constraints) == self.ncomp
+    @staticmethod
+    def _get_constraints(constraints, ncomp):
+        assert constraints is None or len(constraints) == ncomp
         if constraints is not None:
-            errors = np.array([
-                    np.inf if x is None or x == np.inf else x for x in constraints
-                    ])
-            fixed = np.array([x == 0. for x in constraints])
-            self.errors = errors
-            self.fixed = fixed
+            constraints = np.array(
+                [np.inf if x is None or x == np.inf else x for x in constraints]
+                )
+            if any(constraints<=0.):
+                raise ValueError("Constraints must be positive or None.")
         else:
-            self.errors = np.ones(self.ncomp)*np.inf
-            self.fixed = np.zeros(self.ncomp, dtype='bool')
-        return self
+            constraints = np.ones(ncomp)*np.inf
+        return constraints
 
     def _summedNoise(self, thetas = None):
-        noise_tot = self.noise*1.  # Make copy
+        noise_tot = self._noise*1.  # Make copy
         if thetas is not None: 
-            for i in range(max(self.ncomp, len(thetas))):
-                noise_tot += thetas[i]*self.flux[i]
+            for i in range(max(self._ncomp, len(thetas))):
+                noise_tot += thetas[i]*self._flux[i]
         return noise_tot
 
-    def _solveD(self, thetas = None, psi = 1.):
+    def _solveD(self, thetas = None):
         """
         Calculates:
             N = noise + thetas*flux
             D = diag(E)*Sigma*diag(E)+diag(N*E)
             x[i] = D^-1 flux[i]*E
 
-        Note: if Sigma = 0: x[i] = flux[i]/noise
+        Note: if Sigma = None: x[i] = flux[i]/noise
 
         Returns:
             x, noise, exposure
         """
         noise = self._summedNoise(thetas)
-        exposure = self.exposure*psi
+        exposure = self._exposure
         spexp = la.aslinearoperator(sp.diags(exposure))
         D = (
                 la.aslinearoperator(sp.diags(noise*exposure))
-                + spexp*self.systematics*spexp
+                + spexp*self._systematics*spexp
                 )
-        x = np.zeros((self.ncomp, self.nbins))
-        if self.solver == "direct":
-            dense = D(np.eye(self.nbins))
+        x = np.zeros((self._ncomp, self._nbins))
+        if self._solver == "direct":
+            dense = D(np.eye(self._nbins))
             invD = np.linalg.linalg.inv(dense)
-            for i in range(self.ncomp):
-                x[i] = np.dot(invD, self.flux[i]*exposure)*exposure
-        elif self.solver == "cg":
+            for i in range(self._ncomp):
+                x[i] = np.dot(invD, self._flux[i]*exposure)*exposure
+        elif self._solver == "cg":
             def callback(x):
-                if self.verbose:
+                if self._verbose:
                     print len(x), sum(x), np.mean(x)
-            for i in range(self.ncomp):
-                x0 = self.flux[i]/noise if self.cache is None else self.cache/exposure
-                x[i] = la.cg(D, self.flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-3)[0]
+            for i in range(self._ncomp):
+                x0 = self._flux[i]/noise if self._cache is None else self._cache/exposure
+                x[i] = la.cg(D, self._flux[i]*exposure, x0 = x0, callback = callback, tol = 1e-3)[0]
                 x[i] *= exposure
-                self.cache= x[i]
+                self._cache= x[i]
         else:
             raise KeyError("Solver unknown.")
         return x, noise, exposure
 
-    def fishermatrix(self, thetas = None, psi = 1.):
+    def fishermatrix(self, thetas = None):
         """Return Fisher Information Matrix.
 
         Arguments
@@ -212,16 +246,16 @@ class Swordfish(object):  # Everything is flux!
         thetas : array-like, optional
             Flux components added to noise during evaluation.
         """
-        x, noise, exposure = self._solveD(thetas=thetas, psi=psi)
-        I = np.zeros((self.ncomp,self.ncomp))
-        for i in range(self.ncomp):
+        x, noise, exposure = self._solveD(thetas=thetas)
+        I = np.zeros((self._ncomp,self._ncomp))
+        for i in range(self._ncomp):
             for j in range(i+1):
-                tmp = sum(self.flux[i]*x[j])
+                tmp = sum(self._flux[i]*x[j])
                 I[i,j] = tmp
                 I[j,i] = tmp
-        return I
+        return I+np.diag(1./self._constraints**2)
 
-    def infoflux(self, thetas = None, psi = 1.):
+    def infoflux(self, thetas = None):
         """Return Fisher Information Flux.
 
         Arguments
@@ -229,18 +263,43 @@ class Swordfish(object):  # Everything is flux!
         thetas : array-like, optional
             Flux components added to noise during evaluation.
         """
-        x, noise, exposure = self._solveD(thetas=thetas, psi=psi)
+        x, noise, exposure = self._solveD(thetas=thetas)
 
-        F = np.zeros((self.ncomp,self.ncomp,self.nbins))
-        for i in range(self.ncomp):
+        F = np.zeros((self._ncomp,self._ncomp,self._nbins))
+        for i in range(self._ncomp):
             for j in range(i+1):
                 tmp = x[i]*x[j]*noise/(exposure**2.)
                 F[i,j] = tmp
                 F[j,i] = tmp
         return F
 
-    def effectivefishermatrix(self, i, **kwargs):
-        """Return effective Fisher Information Matrix.
+    def effectivefishermatrix(self, indexlist, **kwargs):
+        """Return variance of theta.
+
+        Arguments
+        ---------
+        i : integer
+            index of component of interest, or list of indices
+        **kwargs
+            Passed on to fishermatrix
+        """
+        if isinstance(indexlist, np.int):
+            indexlist = [indexlist]
+        indices = np.setdiff1d(range(self._ncomp), indexlist)
+        n = len(indexlist)
+
+        I = self.fishermatrix(**kwargs)
+        A = I[indexlist,:][:,indexlist]
+        B = I[indices,:][:,indexlist]
+        C = I[indices,:][:,indices]
+        invC = np.linalg.linalg.inv(C)
+
+        Ieff = A - B.T.dot(invC.dot(B))
+
+        return Ieff
+
+    def variance(self, i, **kwargs):
+        """Return variance of theta.
 
         Arguments
         ---------
@@ -251,7 +310,7 @@ class Swordfish(object):  # Everything is flux!
         """
         I = self.fishermatrix(**kwargs)
         invI = np.linalg.linalg.inv(I)
-        return 1./invI[i,i]
+        return invI[i,i]
 
     def effectiveinfoflux(self, i, **kwargs):
         """Return effective Fisher Information Flux.
@@ -265,7 +324,7 @@ class Swordfish(object):  # Everything is flux!
         """
         F = self.infoflux(**kwargs)
         I = self.fishermatrix(**kwargs)
-        n = self.ncomp
+        n = self._ncomp
         if n == 1:
             return F[i,i]
         indices = np.setdiff1d(range(n), i)
@@ -287,56 +346,66 @@ class Swordfish(object):  # Everything is flux!
         return eff_F
 
     # Likelihood with systematics
-    def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-6, derivative = False):
-        """Return likelihood function.
+    def lnL(self, thetas, thetas0, dmu = None, epsilon = 1e-3, derivative = False):
+        """Return likelihood function, assuming Asimov data.
 
         Arguments
         ---------
         thetas : array-like, optional
             Definition of flux (added to noise during evaluation).
         thetas0 : array-like, optional
-            Definition of mock data.
+            Definition of Asimov data.
         dmu : array-like
             Systematic deviation.
         epsilon : Float
-            Magnitude of identity matrix added to Sigma for stable matrix
-            inversion.  Should be smaller than statistical noise to not affect
-            the result.
+            Fraction of diagonal noise added to Sigma for stable matrix
+            inversion.  Default is 1e-2.
+        derivative: bool
+            Return also partial derivative w.r.t. thetas and w.r.t. dmu
         """
-        mu0 = self._summedNoise(thetas0)*self.exposure
-        mu =  self._summedNoise(thetas)*self.exposure
+        mu0 = self._summedNoise(thetas0)*self._exposure
+        systnoise = self._summedNoise(thetas0)*epsilon/self._exposure
+        mu =  self._summedNoise(thetas)*self._exposure
         if dmu is None:
-            dmu = np.zeros_like(self.exposure)
-        if self.sysflag:
-            mu += dmu
+            dmu = np.zeros_like(self._exposure)
+        if self._sysflag:
+            mu += dmu*self._exposure
+        self._at_bound = any(mu<mu0*1e-6)
+        mu = np.where(mu<mu0*1e-6, mu0*1e-6, mu)
         lnL = (mu0*np.log(mu)-mu-gammaln(mu0+1)).sum()
-        if self.sysflag:
-            dense = self.systematics(np.eye(self.nbins))
-            invS = np.linalg.linalg.inv(dense+np.eye(self.nbins)*epsilon)
+        lnL -= (0.5*thetas**2/self._constraints**2).sum()
+        if self._sysflag:
+            dense = self._systematics(np.eye(self._nbins))
+            #invS = np.linalg.linalg.inv(dense+np.eye(self._nbins)*epsilon)
+            invS = np.linalg.linalg.inv(dense+np.diag(systnoise))
             lnL -= 0.5*(invS.dot(dmu)*dmu).sum()
         if derivative:
-            dlnL_dtheta = (mu0/mu*self.flux*self.exposure-self.flux*self.exposure).sum(axis=1)
-            if self.sysflag:
-                dlnL_dmu = mu0/mu - 1. - invS.dot(dmu)
+            dlnL_dtheta = (mu0/mu*self._flux*self._exposure-self._flux*self._exposure).sum(axis=1)
+            dlnL_dtheta -= thetas/self._constraints**2
+            if self._sysflag:
+                dlnL_dmu = mu0/mu*self._exposure - self._exposure - invS.dot(dmu)
             else:
                 dlnL_dmu = None
             return lnL, dlnL_dtheta, dlnL_dmu
         else:
             return lnL
 
-    def profile_lnL(self, thetas, thetas0, epsilon = 1e-6,
-            free_thetas = None):
+    def profile_lnL(self, thetas, thetas0, epsilon = 1e-3, free_thetas = None):
         """Return profile likelihood.
 
         Arguments
         ---------
-        fix_thetas : array-like, boolean
+        free_thetas : array-like, boolean
             Parameters kept fixed during maximization
         """
+        thetas = np.array(thetas, dtype='float64')
+        thetas0 = np.array(thetas0, dtype='float64')
         if free_thetas is None:
             free_thetas = np.zeros(len(thetas), dtype='bool')
+        else:
+            free_thetas = np.array(free_thetas, dtype='bool')
         Nfree_thetas = (free_thetas).sum()
-        Nsyst = len(self.exposure) if self.sysflag else 0
+        Nsyst = len(self._exposure) if self._sysflag else 0
         thetas = thetas.copy()
         N = Nfree_thetas + Nsyst
         x0 = np.zeros(N)
@@ -346,8 +415,8 @@ class Swordfish(object):  # Everything is flux!
             global fp
             thetas[free_thetas] = x[:Nfree_thetas]
             dmu = x[Nfree_thetas:]
-            lnL, grad_theta, grad_dmu = self.lnL(thetas, thetas0, dmu = dmu, epsilon = epsilon,
-                    derivative = True)
+            lnL, grad_theta, grad_dmu = self.lnL(thetas, thetas0, dmu = dmu,
+                    epsilon = epsilon, derivative = True)
             fp = np.zeros(N)
             fp[:Nfree_thetas] = grad_theta[free_thetas]
             fp[Nfree_thetas:] = grad_dmu
@@ -355,9 +424,16 @@ class Swordfish(object):  # Everything is flux!
         def fprime(x):
             global fp
             return -fp
-        result = fmin_l_bfgs_b(f, x0, fprime)
-        print "best-fit parameters:", result[0]
-        return result[1]
+        if N == 0.:
+            return self.lnL(thetas, thetas0, dmu = None)
+        result = fmin_l_bfgs_b(f, x0, fprime, approx_grad = False)
+        if self._verbose:
+            print "Best-fit parameters:", result[0]
+        if self._at_bound:
+            print "WARNING: No maximum with non-negative flux found."
+            return None
+        else:
+            return -result[1]
 
 class EffectiveCounts(object):
     """EffectiveCounts(model).
@@ -373,7 +449,24 @@ class EffectiveCounts(object):
         Note: The functionality applies *only* to additive component models.
         You have been warned.
         """
-        self.model = model
+        self._model = model
+
+    def noise_counts(self):
+        """Return total counts.
+
+        Parameters
+        ----------
+        i : integer
+            Component of interest.
+        theta : float
+            Normalization of component i.
+
+        Returns
+        -------
+        lambda : float
+            Number of counts in component i.
+        """
+        return sum(self._model._noise*self._model._exposure)
 
     def counts(self, i, theta):
         """Return total counts.
@@ -390,9 +483,9 @@ class EffectiveCounts(object):
         lambda : float
             Number of counts in component i.
         """
-        return sum(self.model.flux[i]*self.model.exposure*theta)
+        return sum(self._model._flux[i]*self._model._exposure*theta)
 
-    def effectivecounts(self, i, theta, psi = 1.):
+    def effectivecounts(self, i, theta):
         """Return effective counts.
 
         Parameters
@@ -409,17 +502,17 @@ class EffectiveCounts(object):
         b : float
             Effective backgroundc counts.
         """
-        I0 = self.model.effectivefishermatrix(i, psi = psi)
-        thetas = np.zeros(self.model.ncomp)
+        I0 = 1./self._model.variance(i)
+        thetas = np.zeros(self._model._ncomp)
         thetas[i] = theta
-        I = self.model.effectivefishermatrix(i, thetas = thetas, psi = psi)
+        I = 1./self._model.variance(i, thetas = thetas)
         if I0 == I:
             return 0., None
         s = 1/(1/I-1/I0)*theta**2
         b = 1/I0/(1/I-1/I0)**2*theta**2
         return s, b
 
-    def upperlimit(self, alpha, i, psi = 1., gaussian = False):
+    def upperlimit(self, alpha, i, gaussian = False):
         """Returns upper limits, based on effective counts method.
 
         Parameters
@@ -436,15 +529,15 @@ class EffectiveCounts(object):
         thetaUL : float
             Predicted upper limit on component i.
         """
-        Z = 2.64  # FIXME
-        I0 = self.model.effectivefishermatrix(i, psi = psi)
+        Z = stats.norm.isf(alpha)
+        I0 = 1./self._model.variance(i)
         if gaussian:
             return Z/np.sqrt(I0)
         else:
-            thetas = np.zeros(self.model.ncomp)
+            thetas = np.zeros(self._model._ncomp)
             thetaUL_est = Z/np.sqrt(I0)  # Gaussian estimate
             thetas[i] = thetaUL_est
-            I = self.model.effectivefishermatrix(i, thetas = thetas, psi = psi)
+            I = 1./self._model.variance(i, thetas = thetas)
             if (I0-I)<0.02*I:  # 1% accuracy of limits
                 thetaUL = thetaUL_est
             else:
@@ -452,7 +545,7 @@ class EffectiveCounts(object):
                 theta_list = [thetaUL_est]
                 while True:
                     theta = theta_list[-1]
-                    s, b = self.effectivecounts(i, theta = theta, psi = psi)
+                    s, b = self.effectivecounts(i, theta = theta)
                     if s == 0: b = 1.
                     z_list.append(s/np.sqrt(s+b))
                     if z_list[-1] > Z:
@@ -463,35 +556,56 @@ class EffectiveCounts(object):
                 thetaUL = np.interp(Z, z_list, theta_list)
             return thetaUL
 
-    def discoveryreach(self, alpha, i, psi = 1., gaussian = False):
-        raise NotImplemented()
+    def discoveryreach(self, alpha, i, gaussian = False):
+        Z = stats.norm.isf(alpha)
+        var0 = self._model.variance(i)
+        if gaussian:  # Gaussian approximation
+            return Z*var0**0.5
 
+        thetas = np.zeros(self._model._ncomp)
+        thetaDT_est = Z*np.sqrt(var0)  # Gaussian approx. as starting point
+        thetas[i] = thetaDT_est
+        var = self._model.variance(i, thetas = thetas)
+        if abs(var0 - var) < 0.02*var:  # Still Gaussian enough
+            return Z*var0**0.5
+        z_list = []
+        theta_list = [thetaDT_est]
+        while True:
+            theta = theta_list[-1]
+            s, b = self.effectivecounts(i, theta = theta)
+            if s == 0: b = 1.
+            z_list.append((s+b)*np.log((s+b)/b)-s)
+            if z_list[-1] > Z**2/2:
+                break
+            else:
+                theta_list.append(theta*1.3)
+        return np.interp(Z**2/2, z_list, theta_list)
 
-## For later
-
-class Visualization(object):
-    def __init__(self, xy, I11, I22, I12):
-        pass
-
-    def plot(self):
-        pass
-
-    def integrate(self):
-        pass
-
-def tensorproduct(Sigma1, Sigma2):
-    Sigma1 = la.aslinearoperator(Sigma1)
-    Sigma2 = la.aslinearoperator(Sigma2)
-    n1 = np.shape(Sigma1)[0]
-    n2 = np.shape(Sigma2)[0]
-    Sigma2 = Sigma2(np.eye(n2))
-    N = n1*n2
-    def Sigma(x):
-        A = np.reshape(x, (n1, n2))
-        B = np.zeros_like(A)
-        for i in range(n2):
-            y = Sigma1(A[:,i])
-            for j in range(n2):
-                B[:,j] += Sigma2[i,j]*y
-        return np.reshape(B, N)
-    return la.LinearOperator((N, N), matvec = lambda x: Sigma(x))
+### Obsolete
+#
+#class Visualization(object):
+#    def __init__(self, xy, I11, I22, I12):
+#        pass
+#
+#    def plot(self):
+#        pass
+#
+#    def integrate(self):
+#        pass
+#
+#def tensorproduct(Sigma1, Sigma2):
+#    Sigma1 = la.aslinearoperator(Sigma1)
+#    Sigma2 = la.aslinearoperator(Sigma2)
+#    n1 = np.shape(Sigma1)[0]
+#    n2 = np.shape(Sigma2)[0]
+#    Sigma2 = Sigma2(np.eye(n2))
+#    N = n1*n2
+#    def Sigma(x):
+#        A = np.reshape(x, (n1, n2))
+#        B = np.zeros_like(A)
+#        for i in range(n2):
+#            y = Sigma1(A[:,i])
+#            for j in range(n2):
+#                B[:,j] += Sigma2[i,j]*y
+#        return np.reshape(B, N)
+#    return la.LinearOperator((N, N), matvec = lambda x: Sigma(x))

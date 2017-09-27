@@ -4,9 +4,9 @@
 from __future__ import division
 import healpy as hp
 import numpy as np
-import HARPix as harp
+import harpix as harp
 import pylab as plt
-from core import *
+import swordfish as sf
 from tools import *
 
 def test_3d():
@@ -145,20 +145,22 @@ def test_MW_dSph():
     nside=32
     def plot_harp(h, filename):
         m = h.get_healpix(128)
-        hp.mollview(np.log10(m), nest=True)
+        vmax = np.log10(m).max()
+        vmin = vmax-2
+        hp.mollview(np.log10(m), nest=True, min = vmin, max = vmax)
         plt.savefig(filename)
 
     dims = ()
 
     # Signal definition
     spec = 1.
-    MW = harp.HARPix(dims = dims).add_iso(8).add_singularity((0,0), 0.1, 2., n = 100)
-    MW.add_func(lambda d: spec/(.1+d)**2, mode = 'dist', center=(0,0))
+    MW = harp.HARPix(dims = dims).add_iso(2).add_singularity((0,0), 0.1, 2., n = 10)
+    MW.add_func(lambda d: spec/(1+d)**2, mode = 'dist', center=(0,0))
     pos = (50, 40)
-    dSph = harp.HARPix(dims = dims).add_singularity(pos, 0.1, 20, n = 100)
-    dSph.add_func(lambda d: 0.1*spec/(.1+d)**2, mode = 'dist', center=pos)
-    sig = MW + dSph
-    sig.data += 1  # EGBG
+#    dSph = harp.HARPix(dims = dims).add_singularity(pos, 0.1, 20, n = 10)
+#    dSph.add_func(lambda d: 0.1*spec/(.1+d)**2, mode = 'dist', center=pos)
+    sig = MW #+ dSph
+    sig.data += .001  # EGBG
     plot_harp(sig, 'sig.eps')
 
     # Background definition
@@ -167,18 +169,15 @@ def test_MW_dSph():
     plot_harp(bg, 'bg.eps')
 
     # Covariance matrix definition
-    cov = HARPix_Sigma(sig)
-    var = bg*bg
-    var.data *= 0.1  # 10% uncertainty
-    cov.add_systematics(err = bg*0.1, sigmas = [100], Sigma = None, nside =
-            nside)
+    cov = harpix_Sigma(sig)
+    cov.add_systematics(err = bg*0.1, sigma = 10., Sigma = None, nside = 0)
 
     # Set up swordfish
     fluxes = [sig.data.flatten()]
     noise = bg.get_formatted_like(sig).data.flatten()
     systematics = cov
-    exposure = np.ones_like(noise)*1.
-    m = Swordfish(fluxes, noise, systematics, exposure, solver='cg')
+    exposure = np.ones_like(noise)*0.001
+    m = sf.Swordfish(fluxes, noise, systematics, exposure, solver='direct')
 
     F = m.effectiveinfoflux(0)
     f = harp.HARPix.from_data(sig, F)
@@ -362,8 +361,8 @@ def test_convolution():
 
 
 if __name__ == "__main__":
-    test_3d()
-    # test_MW_dSph()
+    #test_3d()
+    test_MW_dSph()
     #test_covariance()
     #test_simple()
     #test_UL()
@@ -372,6 +371,6 @@ if __name__ == "__main__":
     #test_matrix()
     #test_infoflux()
     #test_minuit()
-    test_minuit_contours()
+    # test_minuit_contours()
     #test_convolution()
     # test_matrix()

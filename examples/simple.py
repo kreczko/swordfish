@@ -67,5 +67,19 @@ def main():
 
     plt.savefig('test.eps')
 
+def lnL():
+    x = np.linspace(1, 10, 20)
+    flux = [x**2.4, x/2]
+    noise = np.ones_like(flux[0])
+    exposure = np.ones_like(flux[0])*0.1
+    systematics = np.ones((20, 20))*1.
+    #systematics = None
+    s = sf.Swordfish(flux, noise, systematics, exposure)
+    #syst = noise.copy()
+    #syst[1] *= 2.000
+    print s.profile_lnL(np.array([0.25, 1.0]), np.array([0.23, 1.0]),
+            free_thetas = np.array([False, True]))
+
 if __name__ == "__main__":
-    main()
+    #main()
+    lnL()
