@@ -1,15 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""MetricPlot is a simple tool for the visualization of 2D metric tensors, using
-variable-density streamlines, equal geodesic distance contours and relaxed glyphs.
+"""`metricplot` performs visualization of 2D metric tensors, using
+variable-density streamlines and equal geodesic distance contours.
 
-The anticipated usecase for the tool is to visualize information geometry (see
-swordfish package).
-
-Author : Christoph Weniger <c.weniger@uva.nl>
-Date: 6 Aug 2017
-Version : 0.1
+The intended use is the visualization of information geometry as derived from
+an `Funkfish` instance.
 """
 
 from __future__ import division
@@ -21,32 +17,35 @@ from matplotlib.patches import Ellipse
 import random as rd
 
 class TensorField(object):
-    """Object to generate tensor field."""
+    """Container class for 2-D tensor field and geodesic visualization.
+    """
     def __init__(self, x, y, g, logx = False, logy = False):
-        """Create TensorField object.
+        """Constructor.
 
-        Arguments
-        ---------
-        x : (N,) array
+        Parameters
+        ----------
+        * `x` [vector-like, shape=(N)]:
             Array with x-coordinates.
-        y : (M,) array
+        * `y` [vector-like, shape=(M)]:
             Array with y-coordinates.
-        g : (M, N, 2, 2)
-            Metric grid, using cartesian indexing.
-        logx : boolean (optional)
-            Convert x -> log10(x), default false.
-        logy : boolean (optional)
-            Convert y -> log10(y), default false.
+        * `g` [4-D array, shape=(M, N, 2, 2)]:
+            Metric grid, using Cartesian indexing.
+        * `logx` [boolean]:
+            If `True`, convert internally x -> log10(x), both for coordinates
+            and metric.
+        * `logy` [boolean]:
+            If `True`, convert internally y -> log10(y), both for coordinates
+            and metric.
         """
         if logx or logy:
             x, y, g = self._log10_converter(x, y, g, logx, logy)
         self.x, self.y, self.g = x, y, g
-        self.extent = [x.min(), x.max(), y.min(), y.max()]
+        self._extent = [x.min(), x.max(), y.min(), y.max()]
         gt = g.transpose((1,0,2,3))  # Cartesian --> matrix indexing
-        self.g00 = ip.RectBivariateSpline(x, y, gt[:,:,0,0])
-        self.g11 = ip.RectBivariateSpline(x, y, gt[:,:,1,1])
-        self.g01 = ip.RectBivariateSpline(x, y, gt[:,:,0,1])
-        self.g10 = self.g01
+        self._g00 = ip.RectBivariateSpline(x, y, gt[:,:,0,0])
+        self._g11 = ip.RectBivariateSpline(x, y, gt[:,:,1,1])
+        self._g01 = ip.RectBivariateSpline(x, y, gt[:,:,0,1])
+        self._g10 = self._g01
 
     @staticmethod
     def _log10_converter(x, y, g, logx, logy):
@@ -66,21 +65,45 @@ class TensorField(object):
         return x, y, g
 
     def __call__(self, x, y, dx = 0, dy = 0):
-        g00 = self.g00(x, y, dx = dx, dy = dy)[0,0]
-        g11 = self.g11(x, y, dx = dx, dy = dy)[0,0]
-        g01 = self.g01(x, y, dx = dx, dy = dy)[0,0]
+        g00 = self._g00(x, y, dx = dx, dy = dy)[0,0]
+        g11 = self._g11(x, y, dx = dx, dy = dy)[0,0]
+        g01 = self._g01(x, y, dx = dx, dy = dy)[0,0]
         g10 = g01
         return np.array([[g00, g01], [g10, g11]])
 
     def writeto(self, filename):
+        """Dump tensor field to .npz file.
+
+        Parameters
+        ----------
+        * `filename` [str]:
+            Output filename.
+        """
         np.savez(filename, x=self.x, y=self.y, g=self.g)
 
     @classmethod
     def fromfile(cls, filename, logx = False, logy = False):
+        """Generate `TensorField` instance from .npz file.
+
+        Parameters
+        ----------
+        * `filename` [str]:
+            Input filename.
+        * `logx` [boolean]:
+            If `True`, convert internally x -> log10(x), both for coordinates
+            and metric.
+        * `logy` [boolean]:
+            If `True`, convert internally y -> log10(y), both for coordinates
+            and metric.
+
+        Returns
+        -------
+        * `TF` [`TensorField` instance]
+        """
         data = np.load(filename)
         return cls(data['x'], data['y'], data['g'], logx = logx, logy = logy)
 
-    def Christoffel_1st(self, x, y):
+    def _Christoffel_1st(self, x, y):
         """Return Christoffel symbols, Gamma_{abc}."""
         g  = self.__call__(x, y)
         gx = self.__call__(x, y, dx = 1)
@@ -95,15 +118,15 @@ class TensorField(object):
         G101 = 0.5*(gy[1,0]+gx[1,1]-gy[0,1])
         return np.array([[[G000, G001],[G010, G011]], [[G100, G101],[G110, G111]]])
 
-    def Christoffel_2nd(self, x, y):
-        Christoffel_1st = self.Christoffel_1st(x, y)
+    def _Christoffel_2nd(self, x, y):
+        Christoffel_1st = self._Christoffel_1st(x, y)
         g = self.__call__(x, y)
         inv_g = np.linalg.inv(g)
         return np.tensordot(inv_g, Christoffel_1st, (1, 0))
 
     def _func(self, v, t=0):
         r = np.zeros_like(v)
-        G = self.Christoffel_2nd(v[0], v[1])
+        G = self._Christoffel_2nd(v[0], v[1])
         r[0] = v[2]
         r[1] = v[3]
         r[2] = -(G[0,0,0]*v[2]*v[2]+G[0,0,1]*v[2]*v[3]+G[0,1,0]*v[3]*v[2]+G[0,1,1]*v[3]*v[3])
@@ -111,15 +134,17 @@ class TensorField(object):
 
         return r
 
-    def volume(self):
+    def _volume(self):
+        # NOTE: Deprecated / not used
         density = lambda x, y: np.sqrt(np.linalg.det(self.__call__(x, y)))
-        xmin, xmax, ymin, ymax = self.extent
+        xmin, xmax, ymin, ymax = self._extent
         return dblquad(density, xmin, xmax, lambda x: ymin, lambda x: ymax)[0]
 
-    def sample(self, mask = None, N = 100):
+    def _sample(self, mask = None, N = 100):
+        # NOTE: Deprecated / not used
         X = np.zeros(0)
         Y = np.zeros(0)
-        xmin, xmax, ymin, ymax = self.extent
+        xmin, xmax, ymin, ymax = self._extent
         wmax = 0.  # Determine wmax dynamically
         while True:
             w = np.random.random()*wmax
@@ -138,7 +163,8 @@ class TensorField(object):
         sample = np.array(zip(X,Y))
         return sample
 
-    def relax(self, samples, spring = False, boundaries = None):
+    def _relax(self, samples, spring = False, boundaries = None):
+        # NOTE: Deprecated / not used
         # Using Kindlmann & Westin 2006 prescription
         glist = []
         N = len(samples)
@@ -163,7 +189,7 @@ class TensorField(object):
                 f_list[i] += -f
                 f_list[j] += f
         if boundaries is None:
-            boundaries = self.extent
+            boundaries = self._extent
         for i in range(N):
             bxL = samples[i][0]-boundaries[0]
             bxR = samples[i][0]-boundaries[1]
@@ -177,7 +203,8 @@ class TensorField(object):
 
         return samples + np.array(f_list)*1.0
 
-    def ellipses(self, samples):
+    def _ellipses(self, samples):
+        # NOTE: Deprecated / not used
         for x in samples:
             e_1, e_2, l_1, l_2 = eigen(self.__call__(x[0], x[1]))
             ang = np.degrees(np.arccos(e_1[0]))
@@ -185,17 +212,26 @@ class TensorField(object):
                  ec='0.1', fc = '0.5', angle = ang)
             plt.gca().add_patch(e)
 
-    def get_contour(self, x0, s0, Npoints = 64, plot_geodesics = False, **kwargs):
-        """Plot geodesic sphere.
+    def contour(self, x, s0, Npoints = 64, plot_geodesics = False, **kwargs):
+        """Plot geodesic equal distance contours, aka confidence regions.
 
-        Arguments
-        ---------
-        x0 : (2) array
-            Central position
-        s0 : float
-            Geodesic distance
-        Npoints : integer (optional)
-            Number of points, default 64
+        Parameters
+        ----------
+        * `x` [2-tuple]:
+            Central position.
+        * `levels` [vector-like]:
+            List of geodesic distances at which to generate contours.
+        * `npoints` [integer]:
+            Number of points along contour.
+        * `plot_geodesics` [boolean]:
+            Plot geodesics used to calculate contour.
+        * `**kwargs`:
+            Passed on to `pylab.plot`.
+
+        Returns
+        -------
+        * `contour` [2-D array]:
+            List of contour lines.
         """
         t = np.linspace(0, s0, 30)
         contour = []
@@ -208,17 +244,29 @@ class TensorField(object):
             contour.append(s[-1])
             if plot_geodesics:
                 plt.plot(s[:,0], s[:,1], 'b', lw=0.1)
-        return np.array(contour)
+        contour = np.array(contour)
+        plt.plot(contour.T[0], contour.T[1], **kwargs)
+        return contour
 
-    def get_VectorFields(self):
-        """Generate vector fields from tensor field.
+    def VectorFields(self):
+        """Generate two `VectorField` instances.
 
-        Note: The separation and ordering of the two vector fields breaks
-        likely down in the presence of singularities.
+        The vector fields represent the minor and major axes of the tensor
+        field metric.
 
         Returns
         -------
-        vf1, vf2 : VectorFields
+        * `vf1`[`VectorField` instance]
+        * `vf2`[`VectorField` instance]
+        
+        NOTE: Which of the vector fields represents the major axis can change
+        in different parts of the parameter space, usually when crossing
+        boundaries where the metric is isotropic.  If discontinuities show up
+        in the vector fields, it generally helps to increase the number of grid
+        points of the tensor field.  Note that the implemented separation and
+        ordering of the two vector fields will in general break in general down
+        in the presence of singularities.
+
         """
         g = self.g
         N, M, _, _ = np.shape(g)
@@ -264,39 +312,41 @@ class TensorField(object):
         return vf1, vf2
 
     def quiver(self):
-        vf1, vf2 = self.get_VectorFields()
-        vf1.quiver(color='r')
-        vf2.quiver(color='g')
+        """Generate quiver plot for associated vector fields.
+
+        This is useful for quickly checking that the vector fields look
+        reasonably, have no discontinuities etc.
+        """
+        vf1, vf2 = self.VectorFields()
+        vf1._quiver(color='r')
+        vf2._quiver(color='g')
 
 class VectorField(object):
-    """VectorField(x, y, v, d)
-
-    This class represents a vector field and allows variable-density streamline
-    plotting.
+    """Container class for vector field and streamline visualization.
     """
+
     def __init__(self, x, y, v, d):
-        """Creat a VectorField object from a vector field on a grid.
-  
-        Arguments
-        ---------
-        x : 1-D array (N)
-            Defines x-grid.
-        y : 1-D array (M)
-            Defines y-grid.
-        v : (M, N, 2) array
-            Defines vector field on grid, using cartesian indexing.
-        d : 2-D array (M,N)
-            Defines distance between streamlines.
+        """Constructor.
+        
+        Parameters
+        ----------
+        * `x` [vector-like, shape=(N)]:
+            Array with x-coordinates.
+        * `y` [vector-like, shape=(M)]:
+            Array with y-coordinates.
+        * `v` [3-D array, shape=(M, N, 2)]:
+            Vector field on grid, using Cartesian indexing.
+        * `d` [matrix-like, shape=(M,N)]:
+            Target Euclidean distance between streamlines (must correspond to
+            unit geodesic distance).
         """
-  
-        self.x, self.y, self.v, self.d = x, y, v, d
-        self.extent = [x.min(), x.max(), y.min(), y.max()]
+        self.x, self.y, self.v, self._d = x, y, v, d
+        self._extent = [x.min(), x.max(), y.min(), y.max()]
         vt = v.transpose((1,0,2))  # Cartesian --> matrix indexing
         dt = d.transpose((1,0))  # Cartesian --> matrix indexing
-        self.v0 = ip.RectBivariateSpline(x, y, vt[:,:,0])
-        self.v1 = ip.RectBivariateSpline(x, y, vt[:,:,1])
-        self.d = ip.RectBivariateSpline(x, y, dt)
-        self.lines = []
+        self._v0 = ip.RectBivariateSpline(x, y, vt[:,:,0])
+        self._v1 = ip.RectBivariateSpline(x, y, vt[:,:,1])
+        self._d = ip.RectBivariateSpline(x, y, dt)
 
     def __call__(self, x, t=0, normal = False):
         """Return interpolated vector at position x.
@@ -307,18 +357,18 @@ class VectorField(object):
         normal : boolean (optional)
             Normalize vector, default False.
         """
-        v = np.array([self.v0(x[0], x[1])[0,0], self.v1(x[0], x[1])[0,0]])
+        v = np.array([self._v0(x[0], x[1])[0,0], self._v1(x[0], x[1])[0,0]])
         if normal: v /= np.linalg.norm(v)
         return v
 
-    def dist(self, x):
+    def _dist(self, x):
         """Return interpolated streamline distance at position x.
 
         Arguments
         ---------
         x : 1-D array (2)
         """
-        return self.d(x[0], x[1])[0,0]
+        return self._d(x[0], x[1])[0,0]
 
     def _boundary_mask(self, seg, boundaries):
         """Returns mask for line segments outside of the boundaries.
@@ -360,7 +410,7 @@ class VectorField(object):
                 #dist_min_major = abs(((x-line)*self.major(x)).sum(axis=1)).min()
                 #dist_min_minor = abs(((x-line)*self.minor(x)).sum(axis=1)).min()
                 # FIXME: Hardcoded minimal distance
-                if dist_min < self.dist(x)*0.75:
+                if dist_min < self._dist(x)*0.75:
                     mask[i:] = False
         return mask
 
@@ -415,7 +465,7 @@ class VectorField(object):
             x = lines[j][i]
             v = self.__call__(x)
             v_orth = np.array([v[1], -v[0]])/(v[0]**2+v[1]**2)**0.5
-            xseed = x + v_orth*self.dist(x)*(-1)**rd.randint(0,1)
+            xseed = x + v_orth*self._dist(x)*(-1)**rd.randint(0,1)
             inbounds = self._boundary_mask(np.array([xseed]), boundaries)[0]
             notclose = self._proximity_mask(np.array([xseed]), lines)[0]
             #plt.plot([x[0],xseed[0]], [x[1],xseed[1]], marker='', ls='-', color='b')
@@ -424,17 +474,29 @@ class VectorField(object):
                 return xseed
         return None
 
-    def get_streamlines(self, xinit, mask = None, Nmax = 100, Nsteps = 30, seed = None):
-        """Generate streamlines.
+    def streamlines(self, xinit, mask = None, Nmax = 30, Nsteps = 30, seed =
+            None, **kwargs):
+        """Plot streamlines.
 
-        Arguments
+        Parameters
         ---------
-        xinit: (2) array
-            Position of initial streamline.
-        mask : function
-            Boolean valued mask function.
-        Nmax : int (optional)
-            Maximum number of requested streamlines, default 30.
+        * `xinit` [2-tuple]:
+            Central position.
+        * `mask` [function]:
+            Function of parameters (x,y), returning `False` in masked regions.
+        * `Nmax` [integer]:
+            Maximum number of streamlines, default 30.
+        * `Nsteps` [integer]:
+            Steps in `scipy.integrate.odeint`.
+        * `seed` [integer]:
+            Seed for random number generator.
+        * `**kwargs`:
+            Passed on to `pylab.plot`.
+
+        Returns
+        -------
+        * `lines` [list of 2-D array]:
+            Generated streamlines.
         """
         lines = []
         xseed = xinit
@@ -445,7 +507,9 @@ class VectorField(object):
             lines.append(line)
             xseed = self._seed(lines, boundaries = mask)
             if xseed is None: break
+        for line in lines:
+            plt.plot(line.T[0], line.T[1], **kwargs)
         return lines
 
-    def quiver(self, **kwargs):
+    def _quiver(self, **kwargs):
         plt.quiver(self.x, self.y, self.v[:,:,0], self.v[:,:,1], **kwargs)

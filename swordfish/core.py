@@ -180,7 +180,7 @@ class Swordfish(object):
                 noise_tot += theta[i]*self._flux[i]
         return noise_tot
 
-    def get_mu(self, theta = None):
+    def mu(self, theta = None):
         r"""Return expectation values for given model parameters.
 
         Parameters
@@ -774,7 +774,7 @@ class Funkfish(object):
         return iminuit.Minuit(wf, forced_parameters = varnames, errordef =
                 errordef, **kwargs)
 
-    def get_Swordfish(self, theta0 = None):
+    def Swordfish(self, theta0 = None):
         r"""Generate `Swordfish` instance.
 
         The generated `Swordfish` instance is a local approximation to the
@@ -804,16 +804,16 @@ class Funkfish(object):
         noise = self._f(*x0)
         return Swordfish(flux, noise, self._exposure, self._Sigma, T = self._constraints)
 
-    def get_EffectiveCounts(self, theta0 = None):
+    def EffectiveCounts(self, theta0 = None):
         """Generate `EffectiveCounts` instance.
 
         Directly generates `EffectiveCounts` instance from `Swordfish`
         instance.  See documentation of `get_Swordfish` method .
         """
-        SF = self.get_Swordfish(theta0)
+        SF = self.Swordfish(theta0)
         return EffectiveCounts(SF)
 
-    def get_TensorFields(self, ix, iy, x_values, y_values, theta0 = None):
+    def TensorField(self, ix, iy, x_values, y_values, theta0 = None):
         """Generate `TensorField` instance.
 
         Samples Fisher information matrix on a 2-D grid, and generates an
@@ -850,11 +850,11 @@ class Funkfish(object):
             for j, x in enumerate(x_bins):
                 theta0[ix] = x
                 theta0[iy] = y
-                SF = self.get_Swordfish(x0_dict)
+                SF = self.Swordfish(x0_dict)
                 g[i, j] = SF.effectivefishermatrix((ix, iy))
         return mp.TensorField(x_bins, y_bins, g)
 
-    def get_iminuit(self, theta0 = None, **kwargs):
+    def iminuit(self, theta0 = None, **kwargs):
         """Return an `iminuit` instance.
 
         Model parameters are mapped on `iminuit` variables `x0`, `x1`, `x2`, etc
@@ -871,9 +871,9 @@ class Funkfish(object):
         * `M` [`iminuit` instance]
         """
         x0 = self._get_x0(x0)  # make list
-        SF0 = self.get_Swordfish(x0)
+        SF0 = self.Swordfish(x0)
         def chi2(x):
-            mu = self.get_Swordfish(x).get_mu()  # Get proper model prediction
+            mu = self.Swordfish(x).mu()  # Get proper model prediction
             lnL = SF0.profile_lnL(x-x0, x0*0., mu_overwrite = mu)
             return -2*lnL
         x0err = np.where(x0>0., x0*0.01, 0.01)
