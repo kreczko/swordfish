@@ -1,27 +1,26 @@
 """`swordfish` is Python tool to study the information yield of counting experiments.
 
-A large range of experiments in particle physics and astronomy are at their
-likelihood level described by a Poisson point process.  The `swordfish` module
-implements a general class of such Poisson point processes, and provides easy
-access to its information geometrical properties.  This allows to efficiently
-study and optimize the expected information gain of an experiment from many
-different perspectives.
+Motivation
+----------
 
-In particular, with `swordfish` you can do the following.
+The main purpose of `swordfish` is make the world a better place.  It does so
+by quickly and accurately forecasting experimental sensitivites without all the
+fuss with time-intensive Monte Carlos, mock data generation and likelihood
+maximization.
 
-- Signal detection, using *effective counts method*
-    - Expected upper limits
-    - Expected discovery threshold
-- Parameter regression, using *information geometry*
-    - Confidence contours (2-D)
-    - Streamline visualization of Fisher metric (2-D)
-- Misc
-    - Handle general covariance matrix for background systematics in event space
-    - Integration with `iminuit` to double-check accuracy.
-- Experimental design, using *information flux*
-    - Signal-to-noise maps in event space
-    - Effective signal-to-noise maps that account for correlations and
-      background systematics
+With `swordfish` you can
+
+- Calculate the expected upper limit or discovery reach of an instrument.
+- Derive expected confidence contours for parameter reconstruction.
+- Visualize confidence contours as well as the underlying information metric field.
+- Calculate the *information flux*, an effective signal-to-noise ratio that
+  accounts for background systematics and component degeneracies.
+
+A large range of experiments in particle physics and astronomy are
+statistically described by a Poisson point process.  The `swordfish` module
+implements at its core a rather general version of a Poisson point process, and
+provides easy access to its information geometrical properties.  Based on this
+information, a number of common and less common tasks can be performed.
 
 
 Installation

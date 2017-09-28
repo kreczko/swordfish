@@ -485,7 +485,7 @@ class Swordfish(object):
             global fp
             theta[free_theta] = x[:Nfree_theta]
             dmu = x[Nfree_theta:]
-            lnL, grad_theta, grad_dmu = self.lnL(theta, theta0, dmu = dmu,
+            lnL, grad_theta, grad_dmu = self.lnL(theta, theta0, deltaB = dmu,
                     epsilon = epsilon, derivative = True, mu_overwrite = mu_overwrite)
             fp = np.zeros(N)
             fp[:Nfree_theta] = grad_theta[free_theta]
@@ -712,7 +712,7 @@ class Funkfish(object):
         self._x0 = np.array(theta0, dtype='float64')
         self._Sigma = K
         self._exposure = E
-        self._constraints = K 
+        self._constraints = T
 
     def _get_x0(self, x):
         """Get updated x0."""
@@ -799,7 +799,7 @@ class Funkfish(object):
         -------
         * `SF` [`Swordfish` instance]
         """
-        x0 = self._get_x0(theta)
+        x0 = self._get_x0(theta0)
         flux = self._func_to_templates(self._f, x0)
         noise = self._f(*x0)
         return Swordfish(flux, noise, self._exposure, self._Sigma, T = self._constraints)
@@ -844,7 +844,7 @@ class Funkfish(object):
             `y_values`.
         """
         #FIXME: Fix treatment of theta0
-        theta0 = theta0 .copy()
+        theta0 = theta0.copy()
         g = np.zeros((len(y_bins), len(x_bins), 2, 2))
         for i, y in enumerate(y_bins):
             for j, x in enumerate(x_bins):
@@ -870,6 +870,7 @@ class Funkfish(object):
         -------
         * `M` [`iminuit` instance]
         """
+        x0 = theta0
         x0 = self._get_x0(x0)  # make list
         SF0 = self.Swordfish(x0)
         def chi2(x):
