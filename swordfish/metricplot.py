@@ -12,8 +12,9 @@ from __future__ import division
 import numpy as np
 import scipy.interpolate as ip
 from scipy.integrate import odeint, dblquad
-import pylab as plt
 from matplotlib.patches import Ellipse
+import pylab as plt
+
 import random as rd
 
 class TensorField(object):

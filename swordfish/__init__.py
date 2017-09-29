@@ -1,12 +1,14 @@
-"""`swordfish` is Python tool to study the information yield of counting experiments.
+"""`swordfish` is a Python tool to study the information yield of counting experiments.
+
+NOTE: The package is stable, but still in beta phase.  Use for production only
+if you know what you are doing.
 
 Motivation
 ----------
 
-The main purpose of `swordfish` is make the world a better place.  It does so
-by quickly and accurately forecasting experimental sensitivites without all the
-fuss with time-intensive Monte Carlos, mock data generation and likelihood
-maximization.
+With `swordfish` you can quickly and accurately forecast experimental
+sensitivities without all the fuss with time-intensive Monte Carlos, mock data
+generation and likelihood maximization.
 
 With `swordfish` you can
 
@@ -23,17 +25,30 @@ provides easy access to its information geometrical properties.  Based on this
 information, a number of common and less common tasks can be performed.
 
 
+Documentation
+-------------
+
+Documentation of `swordfish` can be found on
+[github.io](https://cweniger.github.io/swordfish).  For extensive details about
+Fisher forecasting with Poisson likelihoods, the effective counts method, the
+definition of information flux and the treatment of background systematics see
+[http://arxiv.org/abs/1704.05458](http://arxiv.org/abs/1704.05458).
+
+
 Installation
 ------------
 
-The following dependencies are required:
+`swordfish` has been tested with Python 2.7.13 and the packages
 
-- whatever
+- `numpy 1.13.1`
+- `scipy 0.19.0`
+- `matplotlib 2.0.0`
 
+Let us know if you run into problems.
 
 `swordfish` can be installed by invocing
 
-    git clone
+    git clone https://github.com/cweniger/swordfish
     cd swordfish
     python setup.py install
 
@@ -41,7 +56,9 @@ The following dependencies are required:
 Citation
 --------
 
-    TODO
+Please cite
+[http://arxiv.org/abs/1704.05458](http://arxiv.org/abs/1704.05458).
+
 """
 
 from swordfish.core import *

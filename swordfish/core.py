@@ -41,10 +41,11 @@ import numpy as np
 import scipy.sparse.linalg as la
 import scipy.sparse as sp
 from scipy import stats
-import copy
 from scipy.special import gammaln
 from scipy.optimize import fmin_l_bfgs_b
-import metricplot as mp
+import copy
+
+import swordfish.metricplot as mp
 
 
 class Swordfish(object):
