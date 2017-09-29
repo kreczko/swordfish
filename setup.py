@@ -1,18 +1,12 @@
-from distutils.core import setup #, Extension
-#import numpy
-#from Cython.Distutils import build_ext
-#import os
-
-#os.environ["CC"] = "g++"
-#os.environ["CXX"] = "g++"
+from distutils.core import setup
 
 setup(
     name='swordfish',
     version='0.1',
-    description='Your sword for Fisher forecasting that rocks',
+    description='Your sword for Fisher forecasting.',
     author='Thomas Edwards and Christoph Weniger',
-    author_mail='c.weniger@uva.nl',
+    author_email='c.weniger@uva.nl',
     packages=['swordfish'],
     package_data={'swordfish': [] },
-    long_description="""Really long.""",
+    long_description="""swordfish is a Python tool to study the information gain of counting experiments.""",
 )
