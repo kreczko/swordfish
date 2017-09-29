@@ -25,10 +25,20 @@ provides easy access to its information geometrical properties.  Based on this
 information, a number of common and less common tasks can be performed.
 
 
+Get started
+-----------
+
+Most of the functionality of `swordfish` is demonstrated in two jupyter
+notebooks.
+
+- [Linear models and effective counts method](https://github.com/cweniger/swordfish/tree/master/docs/jupyter/Examples1.ipynb)
+- [Non-linear models and confidence contours](https://github.com/cweniger/swordfish/tree/master/docs/jupyter/Examples2.ipynb)
+
+
 Documentation
 -------------
 
-Documentation of `swordfish` can be found on
+A full documentation of `swordfish` can be found on
 [github.io](https://cweniger.github.io/swordfish).  For extensive details about
 Fisher forecasting with Poisson likelihoods, the effective counts method, the
 definition of information flux and the treatment of background systematics see
