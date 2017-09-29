@@ -1137,8 +1137,15 @@ statistically described by a Poisson point process.  The <code>swordfish</code> 
 implements at its core a rather general version of a Poisson point process, and
 provides easy access to its information geometrical properties.  Based on this
 information, a number of common and less common tasks can be performed.</p>
+<h2>Get started</h2>
+<p>Most of the functionality of <code>swordfish</code> is demonstrated in two jupyter
+notebooks.</p>
+<ul>
+<li><a href="https://github.com/cweniger/swordfish/tree/master/docs/jupyter/Examples1.ipynb">Linear models and effective counts method</a></li>
+<li><a href="https://github.com/cweniger/swordfish/tree/master/docs/jupyter/Examples2.ipynb">Non-linear models and confidence contours</a></li>
+</ul>
 <h2>Documentation</h2>
-<p>Documentation of <code>swordfish</code> can be found on
+<p>A full documentation of <code>swordfish</code> can be found on
 <a href="https://cweniger.github.io/swordfish">github.io</a>.  For extensive details about
 Fisher forecasting with Poisson likelihoods, the effective counts method, the
 definition of information flux and the treatment of background systematics see
@@ -1191,10 +1198,20 @@ python setup.py install
 <span class="sd">information, a number of common and less common tasks can be performed.</span>
 
 
+<span class="sd">Get started</span>
+<span class="sd">-----------</span>
+
+<span class="sd">Most of the functionality of `swordfish` is demonstrated in two jupyter</span>
+<span class="sd">notebooks.</span>
+
+<span class="sd">- [Linear models and effective counts method](https://github.com/cweniger/swordfish/tree/master/docs/jupyter/Examples1.ipynb)</span>
+<span class="sd">- [Non-linear models and confidence contours](https://github.com/cweniger/swordfish/tree/master/docs/jupyter/Examples2.ipynb)</span>
+
+
 <span class="sd">Documentation</span>
 <span class="sd">-------------</span>
 
-<span class="sd">Documentation of `swordfish` can be found on</span>
+<span class="sd">A full documentation of `swordfish` can be found on</span>
 <span class="sd">[github.io](https://cweniger.github.io/swordfish).  For extensive details about</span>
 <span class="sd">Fisher forecasting with Poisson likelihoods, the effective counts method, the</span>
 <span class="sd">definition of information flux and the treatment of background systematics see</span>
@@ -1286,15 +1303,14 @@ and (b) corresponds to a component normalization.</p></div>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">model</span>
 
-    <span class="k">def</span> <span class="nf">totalcounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">):</span>
-        <span class="c1"># FIXME: theta as float or list?</span>
+    <span class="k">def</span> <span class="nf">totalcounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta_i</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Return total signal and background counts.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        * `i` [integer]:</span>
 <span class="sd">            Index of component of interest.</span>
-<span class="sd">        * `theta` [vector-like, shape=(n_comp)]:</span>
+<span class="sd">        * `theta_i` [float]:</span>
 <span class="sd">            Normalization of component i.</span>
 
 <span class="sd">        Returns</span>
@@ -1304,19 +1320,18 @@ and (b) corresponds to a component normalization.</p></div>
 <span class="sd">        * `b` [float]:</span>
 <span class="sd">            Total background counts.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">s</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_flux</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_exposure</span><span class="o">*</span><span class="n">theta</span><span class="p">)</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_flux</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_exposure</span><span class="o">*</span><span class="n">theta_i</span><span class="p">)</span>
         <span class="n">b</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_noise</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_exposure</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">s</span><span class="p">,</span> <span class="n">b</span>
 
-    <span class="k">def</span> <span class="nf">effectivecounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">):</span>
-        <span class="c1"># FIXME: theta as float or list?</span>
+    <span class="k">def</span> <span class="nf">effectivecounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta_i</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Return effective signal and background counts.</span>
 
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        * `i` [integer]:</span>
 <span class="sd">            Index of component of interest.</span>
-<span class="sd">        * `theta` [vector-like, shape=(n_comp)]:</span>
+<span class="sd">        * `theta_i` [float]:</span>
 <span class="sd">            Normalization of component i.</span>
 
 <span class="sd">        Returns</span>
@@ -1328,12 +1343,12 @@ and (b) corresponds to a component normalization.</p></div>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="n">I0</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">variance</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
         <span class="n">thetas</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_ncomp</span><span class="p">)</span>
-        <span class="n">thetas</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">theta</span>
+        <span class="n">thetas</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">theta_i</span>
         <span class="n">I</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">variance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">thetas</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">I0</span> <span class="o">==</span> <span class="n">I</span><span class="p">:</span>
             <span class="k">return</span> <span class="mf">0.</span><span class="p">,</span> <span class="bp">None</span>
-        <span class="n">seff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">*</span><span class="n">theta</span><span class="o">**</span><span class="mi">2</span>
-        <span class="n">beff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="n">theta</span><span class="o">**</span><span class="mi">2</span>
+        <span class="n">seff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">*</span><span class="n">theta_i</span><span class="o">**</span><span class="mi">2</span>
+        <span class="n">beff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="n">theta_i</span><span class="o">**</span><span class="mi">2</span>
         <span class="k">return</span> <span class="n">seff</span><span class="p">,</span> <span class="n">beff</span>
 
     <span class="k">def</span> <span class="nf">upperlimit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">alpha</span> <span class="o">=</span> <span class="mf">0.05</span><span class="p">,</span> <span class="n">force_gaussian</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span>
@@ -1371,7 +1386,7 @@ and (b) corresponds to a component normalization.</p></div>
                 <span class="n">theta_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">thetaUL_est</span><span class="p">]</span>
                 <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
                     <span class="n">theta</span> <span class="o">=</span> <span class="n">theta_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-                    <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">theta</span><span class="p">)</span>
+                    <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">b</span> <span class="o">=</span> <span class="mf">1.</span>
                     <span class="n">z_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">s</span><span class="o">+</span><span class="n">b</span><span class="p">))</span>
                     <span class="k">if</span> <span class="n">z_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">Z</span><span class="p">:</span>
@@ -1382,8 +1397,7 @@ and (b) corresponds to a component normalization.</p></div>
                 <span class="n">thetaUL</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">interp</span><span class="p">(</span><span class="n">Z</span><span class="p">,</span> <span class="n">z_list</span><span class="p">,</span> <span class="n">theta_list</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">thetaUL</span>
 
-    <span class="k">def</span> <span class="nf">discoveryreach</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">alpha</span> <span class="o">=</span> <span class="mf">2e-6</span><span class="p">,</span> <span class="n">force_gaussian</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span>
-        <span class="c1">#FIXME: Check definition of alpha</span>
+    <span class="k">def</span> <span class="nf">discoveryreach</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">alpha</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span> <span class="n">force_gaussian</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span>
         <span class="sa">r</span><span class="sd">&quot;&quot;&quot;Return expected discovery reach.</span>
 
 <span class="sd">        Parameters</span>
@@ -1391,8 +1405,7 @@ and (b) corresponds to a component normalization.</p></div>
 <span class="sd">        * `i` [integer]:</span>
 <span class="sd">            Index of component of interest.</span>
 <span class="sd">        * `alpha` [float]:</span>
-<span class="sd">            Statistical significance.  For example, 2-e6 means a 5-sigma</span>
-<span class="sd">            detection.</span>
+<span class="sd">            Statistical significance.</span>
 <span class="sd">        * `force_gaussian` [boolean]:</span>
 <span class="sd">            Force calculation of Gaussian errors (faster, but only accurate in</span>
 <span class="sd">            Gaussian regime).</span>
@@ -1417,7 +1430,7 @@ and (b) corresponds to a component normalization.</p></div>
         <span class="n">theta_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">thetaDT_est</span><span class="p">]</span>
         <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
             <span class="n">theta</span> <span class="o">=</span> <span class="n">theta_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-            <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">theta</span><span class="p">)</span>
+            <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">b</span> <span class="o">=</span> <span class="mf">1.</span>
             <span class="n">z_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">s</span><span class="o">+</span><span class="n">b</span><span class="p">)</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">((</span><span class="n">s</span><span class="o">+</span><span class="n">b</span><span class="p">)</span><span class="o">/</span><span class="n">b</span><span class="p">)</span><span class="o">-</span><span class="n">s</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">z_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">Z</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="mi">2</span><span class="p">:</span>
@@ -1474,7 +1487,7 @@ and (b) corresponds to a component normalization.</p></div>
             
   <div class="item">
     <div class="name def" id="swordfish.EffectiveCounts.discoveryreach">
-    <p>def <span class="ident">discoveryreach</span>(</p><p>self, i, alpha=2e-06, force_gaussian=False)</p>
+    <p>def <span class="ident">discoveryreach</span>(</p><p>self, i, alpha=1e-06, force_gaussian=False)</p>
     </div>
     
 
@@ -1486,8 +1499,7 @@ and (b) corresponds to a component normalization.</p></div>
 <li><code>i</code> [integer]:
     Index of component of interest.</li>
 <li><code>alpha</code> [float]:
-    Statistical significance.  For example, 2-e6 means a 5-sigma
-    detection.</li>
+    Statistical significance.</li>
 <li><code>force_gaussian</code> [boolean]:
     Force calculation of Gaussian errors (faster, but only accurate in
     Gaussian regime).</li>
@@ -1500,16 +1512,14 @@ and (b) corresponds to a component normalization.</p></div>
   <div class="source_cont">
   <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-swordfish.EffectiveCounts.discoveryreach', this);">Show source &equiv;</a></p>
   <div id="source-swordfish.EffectiveCounts.discoveryreach" class="source">
-    <div class="codehilite"><pre><span></span><span class="k">def</span> <span class="nf">discoveryreach</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">alpha</span> <span class="o">=</span> <span class="mf">2e-6</span><span class="p">,</span> <span class="n">force_gaussian</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span>
-    <span class="c1">#FIXME: Check definition of alpha</span>
+    <div class="codehilite"><pre><span></span><span class="k">def</span> <span class="nf">discoveryreach</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">alpha</span> <span class="o">=</span> <span class="mf">1e-6</span><span class="p">,</span> <span class="n">force_gaussian</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span>
     <span class="sa">r</span><span class="sd">&quot;&quot;&quot;Return expected discovery reach.</span>
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    * `i` [integer]:</span>
 <span class="sd">        Index of component of interest.</span>
 <span class="sd">    * `alpha` [float]:</span>
-<span class="sd">        Statistical significance.  For example, 2-e6 means a 5-sigma</span>
-<span class="sd">        detection.</span>
+<span class="sd">        Statistical significance.</span>
 <span class="sd">    * `force_gaussian` [boolean]:</span>
 <span class="sd">        Force calculation of Gaussian errors (faster, but only accurate in</span>
 <span class="sd">        Gaussian regime).</span>
@@ -1532,7 +1542,7 @@ and (b) corresponds to a component normalization.</p></div>
     <span class="n">theta_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">thetaDT_est</span><span class="p">]</span>
     <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
         <span class="n">theta</span> <span class="o">=</span> <span class="n">theta_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-        <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">theta</span><span class="p">)</span>
+        <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">b</span> <span class="o">=</span> <span class="mf">1.</span>
         <span class="n">z_list</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">s</span><span class="o">+</span><span class="n">b</span><span class="p">)</span><span class="o">*</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">((</span><span class="n">s</span><span class="o">+</span><span class="n">b</span><span class="p">)</span><span class="o">/</span><span class="n">b</span><span class="p">)</span><span class="o">-</span><span class="n">s</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">z_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">Z</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="mi">2</span><span class="p">:</span>
@@ -1550,7 +1560,7 @@ and (b) corresponds to a component normalization.</p></div>
             
   <div class="item">
     <div class="name def" id="swordfish.EffectiveCounts.effectivecounts">
-    <p>def <span class="ident">effectivecounts</span>(</p><p>self, i, theta)</p>
+    <p>def <span class="ident">effectivecounts</span>(</p><p>self, i, theta_i)</p>
     </div>
     
 
@@ -1561,7 +1571,7 @@ and (b) corresponds to a component normalization.</p></div>
 <ul>
 <li><code>i</code> [integer]:
     Index of component of interest.</li>
-<li><code>theta</code> [vector-like, shape=(n_comp)]:
+<li><code>theta_i</code> [float]:
     Normalization of component i.</li>
 </ul>
 <h2>Returns</h2>
@@ -1574,14 +1584,13 @@ and (b) corresponds to a component normalization.</p></div>
   <div class="source_cont">
   <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-swordfish.EffectiveCounts.effectivecounts', this);">Show source &equiv;</a></p>
   <div id="source-swordfish.EffectiveCounts.effectivecounts" class="source">
-    <div class="codehilite"><pre><span></span><span class="k">def</span> <span class="nf">effectivecounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">):</span>
-    <span class="c1"># FIXME: theta as float or list?</span>
+    <div class="codehilite"><pre><span></span><span class="k">def</span> <span class="nf">effectivecounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta_i</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Return effective signal and background counts.</span>
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    * `i` [integer]:</span>
 <span class="sd">        Index of component of interest.</span>
-<span class="sd">    * `theta` [vector-like, shape=(n_comp)]:</span>
+<span class="sd">    * `theta_i` [float]:</span>
 <span class="sd">        Normalization of component i.</span>
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -1592,12 +1601,12 @@ and (b) corresponds to a component normalization.</p></div>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">I0</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">variance</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
     <span class="n">thetas</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_ncomp</span><span class="p">)</span>
-    <span class="n">thetas</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">theta</span>
+    <span class="n">thetas</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">theta_i</span>
     <span class="n">I</span> <span class="o">=</span> <span class="mf">1.</span><span class="o">/</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">variance</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">thetas</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">I0</span> <span class="o">==</span> <span class="n">I</span><span class="p">:</span>
         <span class="k">return</span> <span class="mf">0.</span><span class="p">,</span> <span class="bp">None</span>
-    <span class="n">seff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">*</span><span class="n">theta</span><span class="o">**</span><span class="mi">2</span>
-    <span class="n">beff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="n">theta</span><span class="o">**</span><span class="mi">2</span>
+    <span class="n">seff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">*</span><span class="n">theta_i</span><span class="o">**</span><span class="mi">2</span>
+    <span class="n">beff</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="o">/</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">I</span><span class="o">-</span><span class="mi">1</span><span class="o">/</span><span class="n">I0</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="o">*</span><span class="n">theta_i</span><span class="o">**</span><span class="mi">2</span>
     <span class="k">return</span> <span class="n">seff</span><span class="p">,</span> <span class="n">beff</span>
 </pre></div>
 
@@ -1609,7 +1618,7 @@ and (b) corresponds to a component normalization.</p></div>
             
   <div class="item">
     <div class="name def" id="swordfish.EffectiveCounts.totalcounts">
-    <p>def <span class="ident">totalcounts</span>(</p><p>self, i, theta)</p>
+    <p>def <span class="ident">totalcounts</span>(</p><p>self, i, theta_i)</p>
     </div>
     
 
@@ -1620,7 +1629,7 @@ and (b) corresponds to a component normalization.</p></div>
 <ul>
 <li><code>i</code> [integer]:
     Index of component of interest.</li>
-<li><code>theta</code> [vector-like, shape=(n_comp)]:
+<li><code>theta_i</code> [float]:
     Normalization of component i.</li>
 </ul>
 <h2>Returns</h2>
@@ -1633,14 +1642,13 @@ and (b) corresponds to a component normalization.</p></div>
   <div class="source_cont">
   <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-swordfish.EffectiveCounts.totalcounts', this);">Show source &equiv;</a></p>
   <div id="source-swordfish.EffectiveCounts.totalcounts" class="source">
-    <div class="codehilite"><pre><span></span><span class="k">def</span> <span class="nf">totalcounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">):</span>
-    <span class="c1"># FIXME: theta as float or list?</span>
+    <div class="codehilite"><pre><span></span><span class="k">def</span> <span class="nf">totalcounts</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">theta_i</span><span class="p">):</span>
     <span class="sd">&quot;&quot;&quot;Return total signal and background counts.</span>
 <span class="sd">    Parameters</span>
 <span class="sd">    ----------</span>
 <span class="sd">    * `i` [integer]:</span>
 <span class="sd">        Index of component of interest.</span>
-<span class="sd">    * `theta` [vector-like, shape=(n_comp)]:</span>
+<span class="sd">    * `theta_i` [float]:</span>
 <span class="sd">        Normalization of component i.</span>
 <span class="sd">    Returns</span>
 <span class="sd">    -------</span>
@@ -1649,7 +1657,7 @@ and (b) corresponds to a component normalization.</p></div>
 <span class="sd">    * `b` [float]:</span>
 <span class="sd">        Total background counts.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">s</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_flux</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_exposure</span><span class="o">*</span><span class="n">theta</span><span class="p">)</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_flux</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_exposure</span><span class="o">*</span><span class="n">theta_i</span><span class="p">)</span>
     <span class="n">b</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_noise</span><span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">_exposure</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">s</span><span class="p">,</span> <span class="n">b</span>
 </pre></div>
@@ -1721,7 +1729,7 @@ and (b) corresponds to a component normalization.</p></div>
             <span class="n">theta_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">thetaUL_est</span><span class="p">]</span>
             <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
                 <span class="n">theta</span> <span class="o">=</span> <span class="n">theta_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-                <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span> <span class="o">=</span> <span class="n">theta</span><span class="p">)</span>
+                <span class="n">s</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">effectivecounts</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">theta</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">s</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span> <span class="n">b</span> <span class="o">=</span> <span class="mf">1.</span>
                 <span class="n">z_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="o">/</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">s</span><span class="o">+</span><span class="n">b</span><span class="p">))</span>
                 <span class="k">if</span> <span class="n">z_list</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">Z</span><span class="p">:</span>
@@ -1928,16 +1936,15 @@ on Fisher information and results from a full likelihood analysis.</p></div>
 <span class="sd">            that is sampled from the (nx, ny) grid defined by `x_values` and</span>
 <span class="sd">            `y_values`.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1">#FIXME: Fix treatment of theta0</span>
-        <span class="n">theta0</span> <span class="o">=</span> <span class="n">theta0</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-        <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">y_bins</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">x_bins</span><span class="p">),</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">y_bins</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">x_bins</span><span class="p">):</span>
+        <span class="n">theta0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_x0</span><span class="p">(</span><span class="n">theta0</span><span class="p">)</span>
+        <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">y_values</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">x_values</span><span class="p">),</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">y_values</span><span class="p">):</span>
+            <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">x_values</span><span class="p">):</span>
                 <span class="n">theta0</span><span class="p">[</span><span class="n">ix</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
                 <span class="n">theta0</span><span class="p">[</span><span class="n">iy</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span>
-                <span class="n">SF</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Swordfish</span><span class="p">(</span><span class="n">x0_dict</span><span class="p">)</span>
+                <span class="n">SF</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Swordfish</span><span class="p">(</span><span class="n">theta0</span><span class="p">)</span>
                 <span class="n">g</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">SF</span><span class="o">.</span><span class="n">effectivefishermatrix</span><span class="p">((</span><span class="n">ix</span><span class="p">,</span> <span class="n">iy</span><span class="p">))</span>
-        <span class="k">return</span> <span class="n">mp</span><span class="o">.</span><span class="n">TensorField</span><span class="p">(</span><span class="n">x_bins</span><span class="p">,</span> <span class="n">y_bins</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mp</span><span class="o">.</span><span class="n">TensorField</span><span class="p">(</span><span class="n">x_values</span><span class="p">,</span> <span class="n">y_values</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
 
     <span class="k">def</span> <span class="nf">iminuit</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">theta0</span> <span class="o">=</span> <span class="bp">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="sd">&quot;&quot;&quot;Return an `iminuit` instance.</span>
@@ -2197,16 +2204,15 @@ degeneracies, confidence contours, etc.</p>
 <span class="sd">        that is sampled from the (nx, ny) grid defined by `x_values` and</span>
 <span class="sd">        `y_values`.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="c1">#FIXME: Fix treatment of theta0</span>
-    <span class="n">theta0</span> <span class="o">=</span> <span class="n">theta0</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
-    <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">y_bins</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">x_bins</span><span class="p">),</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">y_bins</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">x_bins</span><span class="p">):</span>
+    <span class="n">theta0</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_x0</span><span class="p">(</span><span class="n">theta0</span><span class="p">)</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="nb">len</span><span class="p">(</span><span class="n">y_values</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">x_values</span><span class="p">),</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">y</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">y_values</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">x_values</span><span class="p">):</span>
             <span class="n">theta0</span><span class="p">[</span><span class="n">ix</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span>
             <span class="n">theta0</span><span class="p">[</span><span class="n">iy</span><span class="p">]</span> <span class="o">=</span> <span class="n">y</span>
-            <span class="n">SF</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Swordfish</span><span class="p">(</span><span class="n">x0_dict</span><span class="p">)</span>
+            <span class="n">SF</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">Swordfish</span><span class="p">(</span><span class="n">theta0</span><span class="p">)</span>
             <span class="n">g</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">SF</span><span class="o">.</span><span class="n">effectivefishermatrix</span><span class="p">((</span><span class="n">ix</span><span class="p">,</span> <span class="n">iy</span><span class="p">))</span>
-    <span class="k">return</span> <span class="n">mp</span><span class="o">.</span><span class="n">TensorField</span><span class="p">(</span><span class="n">x_bins</span><span class="p">,</span> <span class="n">y_bins</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">mp</span><span class="o">.</span><span class="n">TensorField</span><span class="p">(</span><span class="n">x_values</span><span class="p">,</span> <span class="n">y_values</span><span class="p">,</span> <span class="n">g</span><span class="p">)</span>
 </pre></div>
 
   </div>
@@ -2390,32 +2396,32 @@ flux.</p></div>
         <span class="n">S</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">S</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
         <span class="k">assert</span> <span class="n">S</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;S is not matrix-like.&quot;</span>
         <span class="n">n_comp</span><span class="p">,</span> <span class="n">n_bins</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">shape</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_flux</span> <span class="o">=</span> <span class="n">S</span>
 
         <span class="n">B</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
         <span class="k">assert</span> <span class="n">B</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,),</span> <span class="s2">&quot;B has incorrect shape.&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_noise</span> <span class="o">=</span> <span class="n">B</span> 
 
         <span class="k">if</span> <span class="n">E</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
             <span class="n">E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
             <span class="k">assert</span> <span class="n">E</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,),</span> <span class="s2">&quot;E has incorrect shape.&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_exposure</span> <span class="o">=</span> <span class="n">E</span>
 
-        <span class="n">K</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">aslinearoperator</span><span class="p">(</span><span class="n">K</span><span class="p">)</span> <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">None</span>
-        <span class="k">assert</span> <span class="n">K</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> <span class="s2">&quot;K has incorrect shape.&quot;</span>
+        <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_sysflag</span> <span class="o">=</span> <span class="bp">False</span>
+            <span class="n">K</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">LinearOperator</span><span class="p">((</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> 
+                    <span class="n">matvec</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_sysflag</span> <span class="o">=</span> <span class="bp">True</span>
+            <span class="k">assert</span> <span class="n">K</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> <span class="s2">&quot;K has incorrect shape.&quot;</span>
+            <span class="n">K</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">aslinearoperator</span><span class="p">(</span><span class="n">K</span><span class="p">)</span> <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_systematics</span> <span class="o">=</span> <span class="n">K</span>
 
         <span class="n">T</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_constraints</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_comp</span><span class="p">)</span>
-
-        <span class="bp">self</span><span class="o">.</span><span class="n">_flux</span> <span class="o">=</span> <span class="n">S</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_noise</span> <span class="o">=</span> <span class="n">B</span> 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_exposure</span> <span class="o">=</span> <span class="n">E</span>
-        <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_sysflag</span> <span class="o">=</span> <span class="bp">True</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_systematics</span> <span class="o">=</span> <span class="n">K</span>
-        <span class="k">else</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_sysflag</span> <span class="o">=</span> <span class="bp">False</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_systematics</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">LinearOperator</span><span class="p">((</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> 
-                    <span class="n">matvec</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_constraints</span> <span class="o">=</span> <span class="n">T</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">_nbins</span> <span class="o">=</span> <span class="n">n_bins</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_ncomp</span> <span class="o">=</span> <span class="n">n_comp</span>
 
@@ -2853,26 +2859,26 @@ flux.</p></div>
     <span class="n">S</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">S</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
     <span class="k">assert</span> <span class="n">S</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;S is not matrix-like.&quot;</span>
     <span class="n">n_comp</span><span class="p">,</span> <span class="n">n_bins</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">shape</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_flux</span> <span class="o">=</span> <span class="n">S</span>
     <span class="n">B</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
     <span class="k">assert</span> <span class="n">B</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,),</span> <span class="s2">&quot;B has incorrect shape.&quot;</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_noise</span> <span class="o">=</span> <span class="n">B</span> 
     <span class="k">if</span> <span class="n">E</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
         <span class="n">E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="n">E</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">E</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">&#39;float64&#39;</span><span class="p">)</span>
         <span class="k">assert</span> <span class="n">E</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,),</span> <span class="s2">&quot;E has incorrect shape.&quot;</span>
-    <span class="n">K</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">aslinearoperator</span><span class="p">(</span><span class="n">K</span><span class="p">)</span> <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">None</span>
-    <span class="k">assert</span> <span class="n">K</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> <span class="s2">&quot;K has incorrect shape.&quot;</span>
-    <span class="n">T</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_constraints</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_comp</span><span class="p">)</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_flux</span> <span class="o">=</span> <span class="n">S</span>
-    <span class="bp">self</span><span class="o">.</span><span class="n">_noise</span> <span class="o">=</span> <span class="n">B</span> 
     <span class="bp">self</span><span class="o">.</span><span class="n">_exposure</span> <span class="o">=</span> <span class="n">E</span>
-    <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_sysflag</span> <span class="o">=</span> <span class="bp">True</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_systematics</span> <span class="o">=</span> <span class="n">K</span>
-    <span class="k">else</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_sysflag</span> <span class="o">=</span> <span class="bp">False</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_systematics</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">LinearOperator</span><span class="p">((</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> 
+        <span class="n">K</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">LinearOperator</span><span class="p">((</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> 
                 <span class="n">matvec</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sysflag</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="k">assert</span> <span class="n">K</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="n">n_bins</span><span class="p">,</span> <span class="n">n_bins</span><span class="p">),</span> <span class="s2">&quot;K has incorrect shape.&quot;</span>
+        <span class="n">K</span> <span class="o">=</span> <span class="n">la</span><span class="o">.</span><span class="n">aslinearoperator</span><span class="p">(</span><span class="n">K</span><span class="p">)</span> <span class="k">if</span> <span class="n">K</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span> <span class="k">else</span> <span class="bp">None</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_systematics</span> <span class="o">=</span> <span class="n">K</span>
+    <span class="n">T</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_constraints</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">n_comp</span><span class="p">)</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_constraints</span> <span class="o">=</span> <span class="n">T</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_nbins</span> <span class="o">=</span> <span class="n">n_bins</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_ncomp</span> <span class="o">=</span> <span class="n">n_comp</span>
