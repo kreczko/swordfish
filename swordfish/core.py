@@ -121,32 +121,32 @@ class Swordfish(object):
         S = np.array(S, dtype='float64')
         assert S.ndim == 2, "S is not matrix-like."
         n_comp, n_bins = S.shape
+        self._flux = S
 
         B = np.array(B, dtype='float64')
         assert B.shape == (n_bins,), "B has incorrect shape."
+        self._noise = B 
 
         if E is None:
             E = np.ones(n_bins, dtype='float64')
         else:
             E = np.array(E, dtype='float64')
             assert E.shape == (n_bins,), "E has incorrect shape."
+        self._exposure = E
 
-        K = la.aslinearoperator(K) if K is not None else None
-        assert K.shape == (n_bins, n_bins), "K has incorrect shape."
+        if K is None:
+            self._sysflag = False
+            K = la.LinearOperator((n_bins, n_bins), 
+                    matvec = lambda x: np.zeros_like(x))
+        else:
+            self._sysflag = True
+            assert K.shape == (n_bins, n_bins), "K has incorrect shape."
+            K = la.aslinearoperator(K) if K is not None else None
+        self._systematics = K
 
         T = self._get_constraints(T, n_comp)
-
-        self._flux = S
-        self._noise = B 
-        self._exposure = E
-        if K is not None:
-            self._sysflag = True
-            self._systematics = K
-        else:
-            self._sysflag = False
-            self._systematics = la.LinearOperator((n_bins, n_bins), 
-                    matvec = lambda x: np.zeros_like(x))
         self._constraints = T
+
         self._nbins = n_bins
         self._ncomp = n_comp
 
@@ -534,15 +534,14 @@ class EffectiveCounts(object):
         """
         self._model = model
 
-    def totalcounts(self, i, theta):
-        # FIXME: theta as float or list?
+    def totalcounts(self, i, theta_i):
         """Return total signal and background counts.
 
         Parameters
         ----------
         * `i` [integer]:
             Index of component of interest.
-        * `theta` [vector-like, shape=(n_comp)]:
+        * `theta_i` [float]:
             Normalization of component i.
 
         Returns
@@ -552,19 +551,18 @@ class EffectiveCounts(object):
         * `b` [float]:
             Total background counts.
         """
-        s = sum(self._model._flux[i]*self._model._exposure*theta)
+        s = sum(self._model._flux[i]*self._model._exposure*theta_i)
         b = sum(self._model._noise*self._model._exposure)
         return s, b
 
-    def effectivecounts(self, i, theta):
-        # FIXME: theta as float or list?
+    def effectivecounts(self, i, theta_i):
         """Return effective signal and background counts.
 
         Parameters
         ----------
         * `i` [integer]:
             Index of component of interest.
-        * `theta` [vector-like, shape=(n_comp)]:
+        * `theta_i` [float]:
             Normalization of component i.
 
         Returns
@@ -576,12 +574,12 @@ class EffectiveCounts(object):
         """
         I0 = 1./self._model.variance(i)
         thetas = np.zeros(self._model._ncomp)
-        thetas[i] = theta
+        thetas[i] = theta_i
         I = 1./self._model.variance(i, theta = thetas)
         if I0 == I:
             return 0., None
-        seff = 1/(1/I-1/I0)*theta**2
-        beff = 1/I0/(1/I-1/I0)**2*theta**2
+        seff = 1/(1/I-1/I0)*theta_i**2
+        beff = 1/I0/(1/I-1/I0)**2*theta_i**2
         return seff, beff
 
     def upperlimit(self, i, alpha = 0.05, force_gaussian = False):
@@ -619,7 +617,7 @@ class EffectiveCounts(object):
                 theta_list = [thetaUL_est]
                 while True:
                     theta = theta_list[-1]
-                    s, b = self.effectivecounts(i, theta = theta)
+                    s, b = self.effectivecounts(i, theta)
                     if s == 0: b = 1.
                     z_list.append(s/np.sqrt(s+b))
                     if z_list[-1] > Z:
@@ -630,8 +628,7 @@ class EffectiveCounts(object):
                 thetaUL = np.interp(Z, z_list, theta_list)
             return thetaUL
 
-    def discoveryreach(self, i, alpha = 2e-6, force_gaussian = False):
-        #FIXME: Check definition of alpha
+    def discoveryreach(self, i, alpha = 1e-6, force_gaussian = False):
         r"""Return expected discovery reach.
 
         Parameters
@@ -639,8 +636,7 @@ class EffectiveCounts(object):
         * `i` [integer]:
             Index of component of interest.
         * `alpha` [float]:
-            Statistical significance.  For example, 2-e6 means a 5-sigma
-            detection.
+            Statistical significance.
         * `force_gaussian` [boolean]:
             Force calculation of Gaussian errors (faster, but only accurate in
             Gaussian regime).
@@ -665,7 +661,7 @@ class EffectiveCounts(object):
         theta_list = [thetaDT_est]
         while True:
             theta = theta_list[-1]
-            s, b = self.effectivecounts(i, theta = theta)
+            s, b = self.effectivecounts(i, theta)
             if s == 0: b = 1.
             z_list.append((s+b)*np.log((s+b)/b)-s)
             if z_list[-1] > Z**2/2:
@@ -844,16 +840,15 @@ class Funkfish(object):
             that is sampled from the (nx, ny) grid defined by `x_values` and
             `y_values`.
         """
-        #FIXME: Fix treatment of theta0
-        theta0 = theta0.copy()
-        g = np.zeros((len(y_bins), len(x_bins), 2, 2))
-        for i, y in enumerate(y_bins):
-            for j, x in enumerate(x_bins):
+        theta0 = self._get_x0(theta0)
+        g = np.zeros((len(y_values), len(x_values), 2, 2))
+        for i, y in enumerate(y_values):
+            for j, x in enumerate(x_values):
                 theta0[ix] = x
                 theta0[iy] = y
-                SF = self.Swordfish(x0_dict)
+                SF = self.Swordfish(theta0)
                 g[i, j] = SF.effectivefishermatrix((ix, iy))
-        return mp.TensorField(x_bins, y_bins, g)
+        return mp.TensorField(x_values, y_values, g)
 
     def iminuit(self, theta0 = None, **kwargs):
         """Return an `iminuit` instance.

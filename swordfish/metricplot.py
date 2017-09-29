@@ -237,11 +237,11 @@ class TensorField(object):
         t = np.linspace(0, s0, 30)
         contour = []
         for phi in np.linspace(0, 2*np.pi, Npoints+1):
-            g0 = self.__call__(x0[0], x0[1])
+            g0 = self.__call__(x[0], x[1])
             v = np.array([np.cos(phi), np.sin(phi)])
             norm = v.T.dot(g0).dot(v)**0.5
             v /= norm
-            s = odeint(self._func, [x0[0], x0[1], v[0], v[1]], t)
+            s = odeint(self._func, [x[0], x[1], v[0], v[1]], t)
             contour.append(s[-1])
             if plot_geodesics:
                 plt.plot(s[:,0], s[:,1], 'b', lw=0.1)
@@ -383,7 +383,7 @@ class VectorField(object):
         -------
         mask : 1-D array (N)
         """
-        xmin, xmax, ymin, ymax = self.extent
+        xmin, xmax, ymin, ymax = self._extent
         mask = (seg[:,0] < xmax) & (seg[:,0] > xmin)& (seg[:,1] < ymax)& (seg[:,1] > ymin)
         if boundaries is not None:
             mask *= boundaries(seg[:,0], seg[:,1])
