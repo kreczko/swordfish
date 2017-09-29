@@ -4,10 +4,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 
     <title>swordfish API documentation</title>
-    <meta name="description" content="`swordfish` is Python tool to study the information yield of counting experiments.
+    <meta name="description" content="`swordfish` is a Python tool to study the information yield of counting experiments.
 
-Motivation
------..." />
+NOTE: The pack..." />
 
   <link href='http://fonts.googleapis.com/css?family=Source+Sans+Pro:400,300' rel='stylesheet' type='text/css'>
   
@@ -1118,12 +1117,13 @@ table {
 
   <header id="section-intro">
   <h1 class="title"><span class="name">swordfish</span> module</h1>
-  <p><code>swordfish</code> is Python tool to study the information yield of counting experiments.</p>
+  <p><code>swordfish</code> is a Python tool to study the information yield of counting experiments.</p>
+<p>NOTE: The package is stable, but still in beta phase.  Use for production only
+if you know what you are doing.</p>
 <h2>Motivation</h2>
-<p>The main purpose of <code>swordfish</code> is make the world a better place.  It does so
-by quickly and accurately forecasting experimental sensitivites without all the
-fuss with time-intensive Monte Carlos, mock data generation and likelihood
-maximization.</p>
+<p>With <code>swordfish</code> you can quickly and accurately forecast experimental
+sensitivities without all the fuss with time-intensive Monte Carlos, mock data
+generation and likelihood maximization.</p>
 <p>With <code>swordfish</code> you can</p>
 <ul>
 <li>Calculate the expected upper limit or discovery reach of an instrument.</li>
@@ -1137,33 +1137,44 @@ statistically described by a Poisson point process.  The <code>swordfish</code> 
 implements at its core a rather general version of a Poisson point process, and
 provides easy access to its information geometrical properties.  Based on this
 information, a number of common and less common tasks can be performed.</p>
+<h2>Documentation</h2>
+<p>Documentation of <code>swordfish</code> can be found on
+<a href="https://cweniger.github.io/swordfish">github.io</a>.  For extensive details about
+Fisher forecasting with Poisson likelihoods, the effective counts method, the
+definition of information flux and the treatment of background systematics see
+<a href="http://arxiv.org/abs/1704.05458">http://arxiv.org/abs/1704.05458</a>.</p>
 <h2>Installation</h2>
-<p>The following dependencies are required:</p>
+<p><code>swordfish</code> has been tested with Python 2.7.13 and the packages</p>
 <ul>
-<li>whatever</li>
+<li><code>numpy 1.13.1</code></li>
+<li><code>scipy 0.19.0</code></li>
+<li><code>matplotlib 2.0.0</code></li>
 </ul>
+<p>Let us know if you run into problems.</p>
 <p><code>swordfish</code> can be installed by invocing</p>
-<div class="codehilite"><pre><span></span>git clone
+<div class="codehilite"><pre><span></span>git clone https://github.com/cweniger/swordfish
 cd swordfish
 python setup.py install
 </pre></div>
 
 
 <h2>Citation</h2>
-<div class="codehilite"><pre><span></span>TODO
-</pre></div>
+<p>Please cite
+<a href="http://arxiv.org/abs/1704.05458">http://arxiv.org/abs/1704.05458</a>.</p>
   
   <p class="source_link"><a href="javascript:void(0);" onclick="toggle('source-swordfish', this);">Show source &equiv;</a></p>
   <div id="source-swordfish" class="source">
-    <div class="codehilite"><pre><span></span><span class="sd">&quot;&quot;&quot;`swordfish` is Python tool to study the information yield of counting experiments.</span>
+    <div class="codehilite"><pre><span></span><span class="sd">&quot;&quot;&quot;`swordfish` is a Python tool to study the information yield of counting experiments.</span>
+
+<span class="sd">NOTE: The package is stable, but still in beta phase.  Use for production only</span>
+<span class="sd">if you know what you are doing.</span>
 
 <span class="sd">Motivation</span>
 <span class="sd">----------</span>
 
-<span class="sd">The main purpose of `swordfish` is make the world a better place.  It does so</span>
-<span class="sd">by quickly and accurately forecasting experimental sensitivites without all the</span>
-<span class="sd">fuss with time-intensive Monte Carlos, mock data generation and likelihood</span>
-<span class="sd">maximization.</span>
+<span class="sd">With `swordfish` you can quickly and accurately forecast experimental</span>
+<span class="sd">sensitivities without all the fuss with time-intensive Monte Carlos, mock data</span>
+<span class="sd">generation and likelihood maximization.</span>
 
 <span class="sd">With `swordfish` you can</span>
 
@@ -1180,17 +1191,30 @@ python setup.py install
 <span class="sd">information, a number of common and less common tasks can be performed.</span>
 
 
+<span class="sd">Documentation</span>
+<span class="sd">-------------</span>
+
+<span class="sd">Documentation of `swordfish` can be found on</span>
+<span class="sd">[github.io](https://cweniger.github.io/swordfish).  For extensive details about</span>
+<span class="sd">Fisher forecasting with Poisson likelihoods, the effective counts method, the</span>
+<span class="sd">definition of information flux and the treatment of background systematics see</span>
+<span class="sd">[http://arxiv.org/abs/1704.05458](http://arxiv.org/abs/1704.05458).</span>
+
+
 <span class="sd">Installation</span>
 <span class="sd">------------</span>
 
-<span class="sd">The following dependencies are required:</span>
+<span class="sd">`swordfish` has been tested with Python 2.7.13 and the packages</span>
 
-<span class="sd">- whatever</span>
+<span class="sd">- `numpy 1.13.1`</span>
+<span class="sd">- `scipy 0.19.0`</span>
+<span class="sd">- `matplotlib 2.0.0`</span>
 
+<span class="sd">Let us know if you run into problems.</span>
 
 <span class="sd">`swordfish` can be installed by invocing</span>
 
-<span class="sd">    git clone</span>
+<span class="sd">    git clone https://github.com/cweniger/swordfish</span>
 <span class="sd">    cd swordfish</span>
 <span class="sd">    python setup.py install</span>
 
@@ -1198,7 +1222,9 @@ python setup.py install
 <span class="sd">Citation</span>
 <span class="sd">--------</span>
 
-<span class="sd">    TODO</span>
+<span class="sd">Please cite</span>
+<span class="sd">[http://arxiv.org/abs/1704.05458](http://arxiv.org/abs/1704.05458).</span>
+
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span> <span class="nn">swordfish.core</span> <span class="kn">import</span> <span class="o">*</span>
