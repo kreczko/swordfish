@@ -56,7 +56,7 @@ Installation
 
 Let us know if you run into problems.
 
-`swordfish` can be installed by invocing
+`swordfish` can be installed by invoking
 
     git clone https://github.com/cweniger/swordfish
     cd swordfish
