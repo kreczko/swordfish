@@ -216,12 +216,15 @@ class Swordfish(object):
                 + spexp*self._systematics*spexp
                 )
         x = np.zeros((self._ncomp, self._nbins))
-        if self._solver == "direct":
+        if not self._sysflag:
+            for i in range(self._ncomp):
+                x[i] = self._flux[i]/noise
+        elif self._sysflag and self._solver == "direct":
             dense = D(np.eye(self._nbins))
             invD = np.linalg.linalg.inv(dense)
             for i in range(self._ncomp):
                 x[i] = np.dot(invD, self._flux[i]*exposure)*exposure
-        elif self._solver == "cg":
+        elif self._sysflag and self._solver == "cg":
             def callback(x):
                 if self._verbose:
                     print len(x), sum(x), np.mean(x)
