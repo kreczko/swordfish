@@ -42,6 +42,7 @@ import scipy.sparse.linalg as la
 import scipy.sparse as sp
 from scipy import stats
 from scipy.special import gammaln
+from scipy.linalg import sqrtm
 from scipy.optimize import fmin_l_bfgs_b
 import copy
 
@@ -218,7 +219,7 @@ class Swordfish(object):
         x = np.zeros((self._ncomp, self._nbins))
         if not self._sysflag:
             for i in range(self._ncomp):
-                x[i] = self._flux[i]/noise
+                x[i] = self._flux[i]/noise*exposure
         elif self._sysflag and self._solver == "direct":
             dense = D(np.eye(self._nbins))
             invD = np.linalg.linalg.inv(dense)
@@ -510,6 +511,64 @@ class Swordfish(object):
         else:
             return -result[1]
 
+class EffectiveDistance(object):
+    def __init__(self, model):
+        """*Effective distance* calculation based on a `Swordfish` instance.
+
+        The effective distance method provides a simple way to calculate the
+        expected statistical distance between two signals, accounting for
+        background variations and statistical uncertainties.  In practice, it
+        maps signal spectra on distance vectors such that the Eucledian
+        distance between vectors corresponds to the statistical
+        difference between signal spectra.
+        """
+        self._model = copy.deepcopy(model)
+        self._A0 = None
+
+    def _get_A(self, S = None):
+        """Return matrix `A`, such that x = A*S is the Eucledian distance vector."""
+        noise = self._model._noise.copy()*1.  # Noise without anything extra
+        if S is not None:
+            noise += S
+        exposure = self._model._exposure
+        spexp = la.aslinearoperator(sp.diags(exposure))
+
+        # Definition: D = N*E + E*Sigma*E
+        D = (
+                la.aslinearoperator(sp.diags(noise*exposure))
+                + spexp*self._model._systematics*spexp
+                )
+        # TODO: Add all components and their errors to D
+
+        D = D(np.eye(self._model._nbins))  # transform to dense matrix
+        invD = np.linalg.linalg.inv(D)
+        A2 = np.diag(exposure).dot(invD).dot(np.diag(exposure))
+        A = sqrtm(A2)
+        return A
+
+    def x(self, i, S, approx = True):
+        """Return model distance vector.
+
+        Parameters
+        ----------
+        * `i` [integer]:
+            Index of component of interest.
+        * `S` [array-like, shape=(n_bins)]:
+            Flux of signal component
+        * `approx` [boolean]:
+            If `True` (default), only invert covariance matrix once and use
+            approximate rescaling to cover Poisson regime.
+        """
+        if approx:
+            if self._A0 is None:
+                self._A0 = self._get_A(S = None)
+            #r = np.sqrt(self._model._noise/(self._model._noise + S))
+            #A = self._A0.dot(np.diag(r))
+            A = self._A0
+        else:
+            raise NotImplementedError("This will come later.")
+            #A = self._get_A(S = S)
+        return A.dot(S)
 
 class EffectiveCounts(object):
     """*Effective counts* analysis based on a `Swordfish` instance.
