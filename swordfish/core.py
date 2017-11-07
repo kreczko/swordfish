@@ -20,7 +20,7 @@ quantities like the
 
 - Fisher information matrix
 - Fisher information flux
-- Effective signal and background counts
+- Equivalent signal and background counts
 - Estimate for trials factor
 
 which can guide the optimization of search strategies of experimental design.
@@ -511,11 +511,11 @@ class Swordfish(object):
         else:
             return -result[1]
 
-class EffectiveDistance(object):
+class EffectiveVector(object):
     def __init__(self, model):
-        """*Effective distance* calculation based on a `Swordfish` instance.
+        """*Effective vector* calculation based on a `Swordfish` instance.
 
-        The effective distance method provides a simple way to calculate the
+        The distance method provides a simple way to calculate the
         expected statistical distance between two signals, accounting for
         background variations and statistical uncertainties.  In practice, it
         maps signal spectra on distance vectors such that the Eucledian
@@ -570,14 +570,14 @@ class EffectiveDistance(object):
             #A = self._get_A(S = S)
         return A.dot(S)
 
-class EffectiveCounts(object):
-    """*Effective counts* analysis based on a `Swordfish` instance.
+class EquivalentCounts(object):
+    """*Equivalent counts* analysis based on a `Swordfish` instance.
 
-    The effective counts method can be used to derive
+    The equivalent counts method can be used to derive
     
     - expected upper limits
     - discovery reach
-    - effective signal and background counts
+    - equivalent signal and background counts
     
     based on the Fisher information matrix of general penalized Poisson
     likelihood models.  The results are usually rather accurate, and work in
@@ -617,8 +617,8 @@ class EffectiveCounts(object):
         b = sum(self._model._noise*self._model._exposure)
         return s, b
 
-    def effectivecounts(self, i, theta_i):
-        """Return effective signal and background counts.
+    def equivalentcounts(self, i, theta_i):
+        """Return equivalent signal and background counts.
 
         Parameters
         ----------
@@ -629,10 +629,10 @@ class EffectiveCounts(object):
 
         Returns
         -------
-        * `seff` [float]:
-            Effective signal counts.
-        * `beff` [float]:
-            Effective background counts.
+        * `s` [float]:
+            Equivalent signal counts.
+        * `b` [float]:
+            Equivalent background counts.
         """
         I0 = 1./self._model.variance(i)
         thetas = np.zeros(self._model._ncomp)
@@ -679,7 +679,7 @@ class EffectiveCounts(object):
                 theta_list = [thetaUL_est]
                 while True:
                     theta = theta_list[-1]
-                    s, b = self.effectivecounts(i, theta)
+                    s, b = self.equivalentcounts(i, theta)
                     if s == 0: b = 1.
                     z_list.append(s/np.sqrt(s+b))
                     if z_list[-1] > Z:
@@ -723,7 +723,7 @@ class EffectiveCounts(object):
         theta_list = [thetaDT_est]
         while True:
             theta = theta_list[-1]
-            s, b = self.effectivecounts(i, theta)
+            s, b = self.equivalentcounts(i, theta)
             if s == 0: b = 1.
             z_list.append((s+b)*np.log((s+b)/b)-s)
             if z_list[-1] > Z**2/2:
@@ -734,7 +734,7 @@ class EffectiveCounts(object):
 
 
 class Funkfish(object):
-    r"""`Swordfish`, `EffectiveCounts` and `iminuit`-factory, based on non-linear models.
+    r"""`Swordfish`, `EquivalentCounts` and `iminuit`-factory, based on non-linear models.
 
     The underlying likelihood function is identical to the one of `Swordfish`,
     with the only difference that model expectations are derived from
@@ -742,7 +742,7 @@ class Funkfish(object):
     \mu_i(\vec\theta, \delta \vec B) = \left[ f_i(\vec\theta) + \delta B_i\right]\cdot E_i
     $$
 
-    `Funkfish` can generate `Swordfish` and `EffectiveCounts` objects as local
+    `Funkfish` can generate `Swordfish` and `EquivalentCounts` objects as local
     approximations to the non-linear model, as well as `iminuit` instances
     based on the non-linear model directly.  This facilitates (a) the fast
     analysis of non-linear models and (b) the comparison between results based
@@ -863,14 +863,14 @@ class Funkfish(object):
         noise = self._f(*x0)
         return Swordfish(flux, noise, self._exposure, self._Sigma, T = self._constraints)
 
-    def EffectiveCounts(self, theta0 = None):
-        """Generate `EffectiveCounts` instance.
+    def EquivalentCounts(self, theta0 = None):
+        """Generate `EquivalentCounts` instance.
 
-        Directly generates `EffectiveCounts` instance from `Swordfish`
+        Directly generates `EquivalentCounts` instance from `Swordfish`
         instance.  See documentation of `get_Swordfish` method .
         """
         SF = self.Swordfish(theta0)
-        return EffectiveCounts(SF)
+        return EquivalentCounts(SF)
 
     def TensorField(self, ix, iy, x_values, y_values, theta0 = None):
         """Generate `TensorField` instance.
@@ -909,7 +909,7 @@ class Funkfish(object):
                 theta0[ix] = x
                 theta0[iy] = y
                 SF = self.Swordfish(theta0)
-                g[i, j] = SF.effectivefishermatrix((ix, iy))
+                g[i, j] = SF.ffectivefishermatrix((ix, iy))
         return mp.TensorField(x_values, y_values, g)
 
     def iminuit(self, theta0 = None, **kwargs):
