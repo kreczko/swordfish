@@ -938,3 +938,56 @@ class Funkfish(object):
         x0err = np.where(x0>0., x0*0.01, 0.01)
         M = self._init_minuit(chi2, x = x0, x_err = x0err, **kwargs)
         return M
+
+#class Ronald(object):
+#    """Wrapper class for convenient access."""
+#    def __init__(self, B, K, T, E):
+#        self._B = B
+#        self._K = K
+#        self._T = T
+#        self._sf = Swordfish(S, B, E, K, T)
+#
+#    def _sf_factory(self, S):
+#
+#
+#    def fishermatrix(self, S): # n-dim
+#        SF = self._sf_factory(S)
+#        # TODO with normalization?
+#        return SF.fishermatrix(theta = [1.])
+#
+#    def infoflux(self, S):  # 1-dim
+#        SF = self._sf_factory(S, theta = [1.])
+#        return SF.infoflux()
+#
+#    def variance(self, S): # 1-dim
+#        SF = self._sf_factory(S)
+#        return SF.variance(0, theta = [1.])
+#
+#    def totalcounts(self, S):  # 1-dim
+#        SF = self._sf_factory(S)
+#        EC = EffectiveCounts(SF)
+#        return EC.totalcounts(0., 1.)
+#
+#    def equivcounts(self, S):  # 1-dim
+#        SF = self._sf_factory(S)
+#        EC = EffectiveCounts(SF)
+#        return EC.effectivecounts(0., 1.)
+#
+#    def upperlimit(self, S, alpha, force_gaussian = False):  # 1-dim
+#        SF = self._sf_factory(S)
+#        EC = EffectiveCounts(SF)
+#        return EC.upperlimit(0., alpha, force_gaussian = force_gaussian))
+#
+#    def discoveryreach(self, S):  # 1-dim
+#        SF = self._sf_factory(S)
+#        EC = EffectiveCounts(SF)
+#        return EC.discoveryreach(0., alpha, force_gaussian = force_gaussian))
+#
+#    def equivdist(self, S):  # 1-dim
+#        SF = self._sf_factory(None)
+#        ED = self.EffectiveDistance(SF)
+#        return ED.x(S)
+#
+#    def getfield(self, Sfunc):
+#        pass
+#
