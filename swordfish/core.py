@@ -939,55 +939,140 @@ class Funkfish(object):
         M = self._init_minuit(chi2, x = x0, x_err = x0err, **kwargs)
         return M
 
-#class Ronald(object):
-#    """Wrapper class for convenient access."""
-#    def __init__(self, B, K, T, E):
-#        self._B = B
-#        self._K = K
-#        self._T = T
-#        self._sf = Swordfish(S, B, E, K, T)
-#
-#    def _sf_factory(self, S):
-#
-#
-#    def fishermatrix(self, S): # n-dim
-#        SF = self._sf_factory(S)
-#        # TODO with normalization?
-#        return SF.fishermatrix(theta = [1.])
-#
-#    def infoflux(self, S):  # 1-dim
-#        SF = self._sf_factory(S, theta = [1.])
-#        return SF.infoflux()
-#
-#    def variance(self, S): # 1-dim
-#        SF = self._sf_factory(S)
-#        return SF.variance(0, theta = [1.])
-#
-#    def totalcounts(self, S):  # 1-dim
-#        SF = self._sf_factory(S)
-#        EC = EffectiveCounts(SF)
-#        return EC.totalcounts(0., 1.)
-#
-#    def equivcounts(self, S):  # 1-dim
-#        SF = self._sf_factory(S)
-#        EC = EffectiveCounts(SF)
-#        return EC.effectivecounts(0., 1.)
-#
-#    def upperlimit(self, S, alpha, force_gaussian = False):  # 1-dim
-#        SF = self._sf_factory(S)
-#        EC = EffectiveCounts(SF)
-#        return EC.upperlimit(0., alpha, force_gaussian = force_gaussian))
-#
-#    def discoveryreach(self, S):  # 1-dim
-#        SF = self._sf_factory(S)
-#        EC = EffectiveCounts(SF)
-#        return EC.discoveryreach(0., alpha, force_gaussian = force_gaussian))
-#
-#    def equivdist(self, S):  # 1-dim
-#        SF = self._sf_factory(None)
-#        ED = self.EffectiveDistance(SF)
-#        return ED.x(S)
-#
-#    def getfield(self, Sfunc):
+class Ronald(object):
+    """Main Roland object."""
+    def __init__(self, B, T = None, E = None, K = None):
+        """This instantiates a specific background realistation."""
+        if not isinstance(B, list):
+            B = [np.array(B, dtype='flota64'),]
+        else:
+            B = [np.array(b, dtype='float64') for b in B]
+            if len(set([b.shape for b in B])) != 1:
+                raise ValueError("Incompatible shapes in B.")
+
+        # Save shape, and flatten arrays
+        shape = B[0].shape
+        B = [b.flatten() for b in B]
+        nbins = len(B[0])
+
+        if T is None:
+            T = list(np.zeros(len(B), dtype='float64'))
+        elif not isinstance(T, list):
+            T = [float(T),]
+        else:
+            T = list(np.array(T, dtype='float64'))
+
+        if len(T) != len(B):
+            raise ValueError("T and B must have same length, or T must be None.")
+
+        if K is not None:
+            assert K.shape == (nbins, nbins)
+
+        if E is None:
+            E = np.ones(nbins)
+        else:
+            E = np.array(E, dtype='float64').flatten()
+
+        self._B = B  # List of equal-sized arrays
+        self._T = T  # List of standard deviations (0., finite or None)
+        self._K = K  
+        self._E = E  # Exposure
+        self._shape = shape
+
+    def _sf_factory(self, S):
+        if isinstance(S, list):
+            S = [np.array(s, dtype='float64') for s in S]
+            assert len(set([s.shape for s in S])) == 1.
+        else:
+            S = [np.array(S, dtype='float64')]
+        assert S[0].shape == self._shape
+        S = [s.flatten() for s in S]
+
+        Ssf = []  # List of "signal" components for Swordfish
+        Tsf = []  # Signal component constraints
+        Bsf = [np.zeros_like(S[0])]  # Fixed background
+
+        for s in S:
+            Ssf.append(s)
+            Tsf.append(None)  # Unconstrained
+
+        for i, t in enumerate(self._T):
+            if t == 0.:
+                Bsf.append(self._B[i])
+            else:
+                Bsf.append(self._B[i])
+                Ssf.append(self._B[i])
+                Tsf.append(self._T[i])
+        Bsf = sum(Bsf)
+
+        return Swordfish(Ssf, Bsf, E = self._E, K = self._K, T = Tsf), len(S)
+
+    def fishermatrix(self, S, add2bkg = None):
+        # Extend to function
+        # TODO: add2bg
+        SF, n = self._sf_factory(S)
+        return SF.effectivefishermatrix(range(n), theta = None)
+
+    def covariance(self, S, add2bkg = None):
+        # Extend to function
+        # TODO: add2bg
+        I = self.fishermatrix(S, add2bkg = add2bkg)
+        return np.linalg.linalg.inv(I)
+
+    def infoflux(self, S, add2bkg = None):  # 1-dim
+        # TODO: add2bg
+        SF, n = self._sf_factory(S)
+        assert n == 1
+        F = SF.effectiveinfoflux(0, theta = None)
+        return np.reshape(F, self._shape)
+
+    def variance(self, S, add2bkg = None):
+        # TODO: add2bg
+        SF, n = self._sf_factory(S)
+        assert n == 1
+        # TODO: add2bg
+        return SF.variance(0, theta = None)
+
+    def totalcounts(self, S):  # 1-dim
+        SF, n = self._sf_factory(S)
+        assert n == 1
+        EC = EquivalentCounts(SF)
+        return EC.totalcounts(0, 1.)
+
+    def equivalentcounts(self, S):  # 1-dim
+        SF, n = self._sf_factory(S)
+        assert n == 1
+        EC = EquivalentCounts(SF)
+        return EC.equivalentcounts(0, 1.)
+
+    def upperlimit(self, S, alpha, force_gaussian = False):  # 1-dim
+        SF, n = self._sf_factory(S)
+        assert n == 1
+        EC = EquivalentCounts(SF)
+        return EC.upperlimit(0, alpha, force_gaussian = force_gaussian)
+
+    def discoveryreach(self, S, alpha, force_gaussian = False):  # 1-dim
+        SF, n = self._sf_factory(S)
+        assert n == 1
+        EC = EquivalentCounts(SF)
+        return EC.discoveryreach(0, alpha, force_gaussian = force_gaussian)
+
+    def distancevector(self, S):  # 1-dim
+        # TODO: Implement distance vector
+        SF, n  = self._sf_factory(None)
+        assert n == 1
+        ED = self.EffectiveDistance(SF)
+        return ED.x(S)
+
+    def getiminuit(self, Sfunc):
+        # TODO: Implement
+        pass
+
+    def profile_lnL(self):
+        # TODO: Implement
+        pass
+
+#    def getfield(self, Sfunc, indices = [0, 1], x_values, y_values):
+#        # TODO: Implement
 #        pass
-#
+#        

@@ -73,4 +73,4 @@ Please cite
 
 from swordfish.core import *
 from swordfish import metricplot
-__all__ = ["Swordfish", "EffectiveCounts", "Funkfish", "metricplot"]
+__all__ = ["Ronald", "Swordfish", "EffectiveCounts", "Funkfish", "metricplot"]
