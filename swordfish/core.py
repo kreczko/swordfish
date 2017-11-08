@@ -511,7 +511,7 @@ class Swordfish(object):
         else:
             return -result[1]
 
-class EffectiveVector(object):
+class EuclideanizedSignal(object):
     def __init__(self, model):
         """*Effective vector* calculation based on a `Swordfish` instance.
 
@@ -983,6 +983,7 @@ class Ronald(object):
         if isinstance(S, list):
             S = [np.array(s, dtype='float64') for s in S]
             assert len(set([s.shape for s in S])) == 1.
+            assert S[0].shape == self._shape
         else:
             S = [np.array(S, dtype='float64')]
         assert S[0].shape == self._shape
@@ -990,7 +991,8 @@ class Ronald(object):
 
         Ssf = []  # List of "signal" components for Swordfish
         Tsf = []  # Signal component constraints
-        Bsf = [np.zeros_like(S[0])]  # Fixed background
+        Bsf = []
+        Bsf.append(np.zeros_like(S[0]))  # Fixed background
 
         for s in S:
             Ssf.append(s)
@@ -1051,26 +1053,49 @@ class Ronald(object):
         EC = EquivalentCounts(SF)
         return EC.upperlimit(0, alpha, force_gaussian = force_gaussian)
 
+    @staticmethod
+    def _lnP(c, mu):
+        # log-Poisson likelihood
+        c = c+1e-10  # stablize result
+        return (c-mu)+c*np.log(mu/c)
+
+    def significance(self, S):
+        s, b = self.equivalentcounts(S)
+        Z = np.sqrt(2*(self._lnP(s+b, s+b) - self._lnP(s+b, b)))
+        alpha = stats.norm.sf(Z)
+        return alpha
+
     def discoveryreach(self, S, alpha, force_gaussian = False):  # 1-dim
         SF, n = self._sf_factory(S)
         assert n == 1
         EC = EquivalentCounts(SF)
         return EC.discoveryreach(0, alpha, force_gaussian = force_gaussian)
 
-    def distancevector(self, S):  # 1-dim
-        # TODO: Implement distance vector
-        SF, n  = self._sf_factory(None)
+    def euclideanize(self, S):  # 1-dim
+        SF, n  = self._sf_factory(S)
         assert n == 1
-        ED = self.EffectiveDistance(SF)
-        return ED.x(S)
+        ED = EuclideanizedSignal(SF)
+        N = SF._noise*SF._exposure
+        eS = ED.x(0, S)*np.sqrt(N)
+        return eS, N
 
     def getiminuit(self, Sfunc):
         # TODO: Implement
         pass
 
-    def profile_lnL(self):
-        # TODO: Implement
-        pass
+    def lnL(self, S, S0):
+        SF, n  = self._sf_factory(S)  # Model point
+        SF0, n0  = self._sf_factory(S0)  # Asimov data
+        assert n == 1
+        assert n0 == 1
+        ncomp = SF._ncomp
+        free_theta = [i != 0 for i in range(ncomp)]
+        theta = [1. if i == 0 else 0. for i in range(ncomp)]
+        theta0 = theta  # Does not matter, since we use mu_overwrite
+        mu = SF.mu(theta)  # Overwrites model predictions
+        lnL = SF0.profile_lnL(theta, theta0, epsilon = 1e-3, free_theta = free_theta,
+                mu_overwrite = mu)
+        return lnL
 
 #    def getfield(self, Sfunc, indices = [0, 1], x_values, y_values):
 #        # TODO: Implement
