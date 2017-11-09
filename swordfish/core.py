@@ -940,7 +940,7 @@ class Funkfish(object):
         return M
 
 class Ronald(object):
-    """Main Roland object."""
+    """Main Ronald object."""
     def __init__(self, B, T = None, E = None, K = None):
         """This instantiates a specific background realistation."""
         if not isinstance(B, list):
