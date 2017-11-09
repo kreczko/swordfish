@@ -909,7 +909,7 @@ class Funkfish(object):
                 theta0[ix] = x
                 theta0[iy] = y
                 SF = self.Swordfish(theta0)
-                g[i, j] = SF.ffectivefishermatrix((ix, iy))
+                g[i, j] = SF.effectivefishermatrix((ix, iy))
         return mp.TensorField(x_values, y_values, g)
 
     def iminuit(self, theta0 = None, **kwargs):
@@ -1097,7 +1097,30 @@ class Ronald(object):
                 mu_overwrite = mu)
         return lnL
 
-#    def getfield(self, Sfunc, indices = [0, 1], x_values, y_values):
-#        # TODO: Implement
-#        pass
-#        
+    def getfield(self, Sfunc, ix, iy, x_values, y_values, theta0):
+        # TODO: Make sure that background are correctly added
+        E = self._E
+        K = self._K
+        T = None
+        FF = Funkfish(Sfunc, theta0, E, K, T)
+        tf =FF.TensorField(ix, iy, x_values, y_values, theta0 = theta0)
+        return tf
+
+    def getMinuit(self, Sfunc, theta0):
+        # TODO: Make sure that background are correctly added
+        E = self._E
+        K = self._K
+        T = None
+        FF = Funkfish(Sfunc, theta0, E, K, T)
+        M = FF.iminuit(theta0)
+        return M
+
+    def Delta(self, S, S0, use_lnL = False):
+        if use_lnL:
+            d2 = -2*(self.lnL(S, S0) - self.lnL(S0, S0))
+            return d2
+        else:
+            eS, N = self.euclideanize(S)
+            eS0, N = self.euclideanize(S0)
+            d2 = ((eS-eS0)**2/(N+eS0)).sum()
+            return d2
