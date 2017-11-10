@@ -512,6 +512,8 @@ class Swordfish(object):
             return -result[1]
 
 class EuclideanizedSignal(object):
+    # WARNING: This only cares about the covariance matrix and background, not
+    # the individual S components
     def __init__(self, model):
         """*Effective vector* calculation based on a `Swordfish` instance.
 
@@ -525,11 +527,9 @@ class EuclideanizedSignal(object):
         self._model = copy.deepcopy(model)
         self._A0 = None
 
-    def _get_A(self, S = None):
+    def _get_A(self):
         """Return matrix `A`, such that x = A*S is the Eucledian distance vector."""
         noise = self._model._noise.copy()*1.  # Noise without anything extra
-        if S is not None:
-            noise += S
         exposure = self._model._exposure
         spexp = la.aslinearoperator(sp.diags(exposure))
 
@@ -546,7 +546,7 @@ class EuclideanizedSignal(object):
         A = sqrtm(A2)
         return A
 
-    def x(self, i, S, approx = True):
+    def x(self, i, S):
         """Return model distance vector.
 
         Parameters
@@ -555,19 +555,10 @@ class EuclideanizedSignal(object):
             Index of component of interest.
         * `S` [array-like, shape=(n_bins)]:
             Flux of signal component
-        * `approx` [boolean]:
-            If `True` (default), only invert covariance matrix once and use
-            approximate rescaling to cover Poisson regime.
         """
-        if approx:
-            if self._A0 is None:
-                self._A0 = self._get_A(S = None)
-            #r = np.sqrt(self._model._noise/(self._model._noise + S))
-            #A = self._A0.dot(np.diag(r))
-            A = self._A0
-        else:
-            raise NotImplementedError("This will come later.")
-            #A = self._get_A(S = S)
+        if self._A0 is None:
+            self._A0 = self._get_A()
+        A = self._A0
         return A.dot(S)
 
 class EquivalentCounts(object):
@@ -979,7 +970,7 @@ class Ronald(object):
         self._E = E  # Exposure
         self._shape = shape
 
-    def _sf_factory(self, S):
+    def _sf_factory(self, S, K_only = False):
         if isinstance(S, list):
             S = [np.array(s, dtype='float64') for s in S]
             assert len(set([s.shape for s in S])) == 1.
@@ -994,20 +985,41 @@ class Ronald(object):
         Bsf = []
         Bsf.append(np.zeros_like(S[0]))  # Fixed background
 
+        # Add signal components (unconstrained)
         for s in S:
             Ssf.append(s)
-            Tsf.append(None)  # Unconstrained
+            Tsf.append(None)
 
-        for i, t in enumerate(self._T):
-            if t == 0.:
-                Bsf.append(self._B[i])
-            else:
-                Bsf.append(self._B[i])
-                Ssf.append(self._B[i])
-                Tsf.append(self._T[i])
+        # Add background components
+        for B in self._B:
+            Bsf.append(B)
         Bsf = sum(Bsf)
 
-        return Swordfish(Ssf, Bsf, E = self._E, K = self._K, T = Tsf), len(S)
+        K = la.aslinearoperator(self._K) if self._K is not None else None
+
+        # If K-matrix is set, dump everything there for efficiency reasons.
+        if self._K is not None: K_only = True
+
+        for i, t in enumerate(self._T):
+            if t > 0.:
+                if K_only:
+        # Add non-fixed background components to covariance matrix
+                    n_bins = len(self._B[i])
+                    Kp = la.LinearOperator((n_bins, n_bins), 
+                            matvec = lambda x, B = self._B[i], T = self._T[i]:
+                            B * (x.T*B).sum() * T**2)
+                    K = Kp if K is None else K + Kp
+                    # NOTE 1: x.T instead of x is required to make operator
+                    # work for input with shape (nbins, 1), which can happen
+                    # internally when transforming to dense matrices.
+                    # NOTE 2: Thanks to Pythons late binding, _B and _T have to
+                    # be communicated via arguments with default values.
+                else:
+        # Add non-fixed background components as additional Swordfish "signals"
+                    Ssf.append(self._B[i])
+                    Tsf.append(self._T[i])
+
+        return Swordfish(Ssf, Bsf, E = self._E, K = K, T = Tsf), len(S)
 
     def fishermatrix(self, S, add2bkg = None):
         # Extend to function
@@ -1072,16 +1084,12 @@ class Ronald(object):
         return EC.discoveryreach(0, alpha, force_gaussian = force_gaussian)
 
     def euclideanize(self, S):  # 1-dim
-        SF, n  = self._sf_factory(S)
+        SF, n  = self._sf_factory(S, K_only = True)
         assert n == 1
         ED = EuclideanizedSignal(SF)
         N = SF._noise*SF._exposure
         eS = ED.x(0, S)*np.sqrt(N)
         return eS, N
-
-    def getiminuit(self, Sfunc):
-        # TODO: Implement
-        pass
 
     def lnL(self, S, S0):
         SF, n  = self._sf_factory(S)  # Model point
