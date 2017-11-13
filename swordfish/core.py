@@ -934,9 +934,25 @@ class Funkfish(object):
         return M
 
 class Ronald(object):
-    """Main Ronald object."""
-    def __init__(self, B, T = None, E = None, K = None):
-        """This instantiates a specific background realistation."""
+    """Signal ."""
+    def __init__(self, B, N = None, T = None, E = None, K = None):
+        """Constructor.
+        
+        Parameters
+        ----------
+        * `B` [list of equal-shaped arrays with length `n_comp`]:
+          Background model
+        * `N` [list of non-negative floats with length `n_comp`, or None]:
+          Normalization of background components, if `None` assumed to be one.
+        * `T` [list of non-negative floats with length `n_comp`, or None]:
+          Uncertainty of background components.  In standard deviations.  If
+          `None`, all components are assumed to be fixed.
+        * `E` [array with the same shape as the components of `B`]:
+          Exposure.  If `None`, this is set to one for all bins.
+        * `K` [matrix-like]:
+          Covariance matrix, meant to refer to the flattened version of the
+          background components.  If `None`, it is set to zero.
+        """
         if not isinstance(B, list):
             B = [np.array(B, dtype='flota64'),]
         else:
@@ -967,13 +983,44 @@ class Ronald(object):
         else:
             E = np.array(E, dtype='float64').flatten()
 
+        if N is None:
+            self._Btot = sum(B)
+        else:
+            self._Btot = sum([B[i]*N[i] for i in range(len(B))])
         self._B = B  # List of equal-sized arrays
         self._T = T  # List of standard deviations (0., finite or None)
-        self._K = K  
+        self._K = la.aslinearoperator(K) if K is not None else None
         self._E = E  # Exposure
         self._shape = shape
 
-    def _sf_factory(self, S, K_only = False):
+    def _ff_factory(self, Sfunc, theta0):
+        """Generate Funkfish object.
+
+        Parameters
+        ----------
+        * `Sfunc` [function]:
+          Signal components.
+        * `theta0` [vector-like, shape=(n_comp)]:
+            Model parameters used for calculation of Asimov data.
+        """
+        Btot = self._Btot
+
+        K = self._K
+        KB = self._B2K(self._B, self._T)
+        Ktot = K if KB is None else (KB if K is None else KB+K)
+        SfuncB = lambda *args: Sfunc(*args) + Btot
+        return Funkfish(SfuncB, theta0, E = self._E, K = Ktot)
+
+    def _sf_factory(self, S, K_only = False, extraB = None):
+        """Generate Swordfish object.
+
+        Parameters
+        ----------
+        * `S` [array or list of arrays]:
+          Signal components.
+        * `K_only' [boolean]:
+          If `True`, dump all background components into `K`.
+        """
         if isinstance(S, list):
             S = [np.array(s, dtype='float64') for s in S]
             assert len(set([s.shape for s in S])) == 1.
@@ -985,84 +1032,176 @@ class Ronald(object):
 
         Ssf = []  # List of "signal" components for Swordfish
         Tsf = []  # Signal component constraints
-        Bsf = []
-        Bsf.append(np.zeros_like(S[0]))  # Fixed background
 
-        # Add signal components (unconstrained)
+        Bsf = self._Btot
+        if extraB is not None:
+            Bsf.append(extraB)
+
+        # Collect signal components 
         for s in S:
             Ssf.append(s)
-            Tsf.append(None)
+            Tsf.append(None)  # Signals are unconstrained
 
-        # Add background components
-        for B in self._B:
-            Bsf.append(B)
-        Bsf = sum(Bsf)
-
-        K = la.aslinearoperator(self._K) if self._K is not None else None
-
-        # If K-matrix is set, dump everything there for efficiency reasons.
-        if self._K is not None: K_only = True
-
-        for i, t in enumerate(self._T):
-            if t > 0.:
-                if K_only:
-        # Add non-fixed background components to covariance matrix
-                    n_bins = len(self._B[i])
-                    Kp = la.LinearOperator((n_bins, n_bins), 
-                            matvec = lambda x, B = self._B[i], T = self._T[i]:
-                            B * (x.T*B).sum() * T**2)
-                    K = Kp if K is None else K + Kp
-                    # NOTE 1: x.T instead of x is required to make operator
-                    # work for input with shape (nbins, 1), which can happen
-                    # internally when transforming to dense matrices.
-                    # NOTE 2: Thanks to Pythons late binding, _B and _T have to
-                    # be communicated via arguments with default values.
-                else:
-        # Add non-fixed background components as additional Swordfish "signals"
+        # If K-matrix is set anyway, dump everything there for efficiency reasons.
+        K = self._K
+        if K is not None or K_only:
+            KB = self._B2K(self._B, self._T)
+            Ktot = K if KB is None else (KB if K is None else KB+K)
+        else:
+            for i, t in enumerate(self._T):
+                if t > 0.:
                     Ssf.append(self._B[i])
                     Tsf.append(self._T[i])
+            Ktot = K
 
-        return Swordfish(Ssf, Bsf, E = self._E, K = K, T = Tsf), len(S)
+        return Swordfish(Ssf, Bsf, E = self._E, K = Ktot, T = Tsf), len(S)
 
-    def fishermatrix(self, S, add2bkg = None):
-        # Extend to function
-        # TODO: add2bg
-        SF, n = self._sf_factory(S)
+    def _B2K(self, B, T):
+        "Transform B and T into contributions to covariance matrix"
+        K = None
+        for i, t in enumerate(T):
+            if t > 0.:
+                n_bins = len(B[i])
+                Kp = la.LinearOperator((n_bins, n_bins), 
+                        matvec = lambda x, B = B[i].flatten(), T = T[i]:
+                        B * (x.T*B).sum() * T**2)
+                K = Kp if K is None else K + Kp
+                # NOTE 1: x.T instead of x is required to make operator
+                # work for input with shape (nbins, 1), which can happen
+                # internally when transforming to dense matrices.
+                # NOTE 2: Thanks to Pythons late binding, _B and _T have to
+                # be communicated via arguments with default values.
+        return K
+
+    def fishermatrix(self, S, S0 = None):
+        """Return Fisher Information Matrix for signal components.
+
+        Parameters
+        ----------
+        * `S` [list of equal-shaped arrays with length `n_comp`]:
+          Signal components.
+
+        Returns
+        -------
+        * `I` [matrix-like, shape=`(n_comp, n_comp)`]:
+          Fisher information matrix.
+        """
+        # TODO: Extend to function, allow to add to background
+        SF, n = self._sf_factory(S, extraB = S0)
         return SF.effectivefishermatrix(range(n), theta = None)
 
-    def covariance(self, S, add2bkg = None):
-        # Extend to function
-        # TODO: add2bg
-        I = self.fishermatrix(S, add2bkg = add2bkg)
+    def covariance(self, S, S0 = None):
+        """Return covariance matrix for signal components.
+
+        The covariance matrix is here approximated by the inverse of the Fisher
+        information matrix.
+
+        Parameters
+        ----------
+        * `S` [list of equal-shaped arrays with length `n_comp`]:
+          Signal components.
+
+        Returns
+        -------
+        * `Sigma` [matrix-like, shape=`(n_comp, n_comp)`]:
+          Covariance matrix.
+        """
+        I = self.fishermatrix(S, S0 = S0)
         return np.linalg.linalg.inv(I)
 
-    def infoflux(self, S, add2bkg = None):  # 1-dim
-        # TODO: add2bg
-        SF, n = self._sf_factory(S)
+    def infoflux(self, S, S0 = None):
+        """Return Fisher information flux.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+
+        Returns
+        -------
+        * `F` [array like]:
+          Fisher information flux.
+        """
+        SF, n = self._sf_factory(S, extraB = S0)
         assert n == 1
         F = SF.effectiveinfoflux(0, theta = None)
         return np.reshape(F, self._shape)
 
-    def variance(self, S, add2bkg = None):
-        # TODO: add2bg
-        SF, n = self._sf_factory(S)
+    def variance(self, S, S0 = None):
+        """Return Variance of single signal component.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+
+        Returns
+        -------
+        * `var` [float]:
+          Variance of signal `S`.
+        """
+        SF, n = self._sf_factory(S, extraB = S0)
         assert n == 1
-        # TODO: add2bg
         return SF.variance(0, theta = None)
 
     def totalcounts(self, S):  # 1-dim
+        """Return total counts.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+
+        Returns
+        -------
+        * `s` [float]:
+          Total signal counts.
+        * `b` [float]:
+          Total background counts.
+        """
         SF, n = self._sf_factory(S)
         assert n == 1
         EC = EquivalentCounts(SF)
         return EC.totalcounts(0, 1.)
 
     def equivalentcounts(self, S):  # 1-dim
+        """Return total counts.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+
+        Returns
+        -------
+        * `s` [float]:
+          Equivalent signal counts.
+        * `b` [float]:
+          Equivalent background counts.
+        """
         SF, n = self._sf_factory(S)
         assert n == 1
         EC = EquivalentCounts(SF)
         return EC.equivalentcounts(0, 1.)
 
     def upperlimit(self, S, alpha, force_gaussian = False):  # 1-dim
+        """Derive projected upper limit.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+        * `alpha` [float]:
+          Significance level.
+        * `force_gaussian` [boolean]:
+          Force calculation of Gaussian errors (faster, but use with care).
+
+        Returns
+        -------
+        * `theta` [float]:
+          Normalization of `S` that corresponds to upper limit with
+          significance level `alpha`.
+        """
         SF, n = self._sf_factory(S)
         assert n == 1
         EC = EquivalentCounts(SF)
@@ -1075,18 +1214,61 @@ class Ronald(object):
         return (c-mu)+c*np.log(mu/c)
 
     def significance(self, S):
+        """Calculate signal significance.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+
+        Returns
+        -------
+        * `alpha` [float]:
+          Significance of signal.
+        """
         s, b = self.equivalentcounts(S)
         Z = np.sqrt(2*(self._lnP(s+b, s+b) - self._lnP(s+b, b)))
         alpha = stats.norm.sf(Z)
         return alpha
 
     def discoveryreach(self, S, alpha, force_gaussian = False):  # 1-dim
+        """Derive discovery reach.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+        * `alpha` [float]:
+          Significance level.
+        * `force_gaussian` [boolean]:
+          Force calculation of Gaussian errors (faster, but use with care).
+
+        Returns
+        -------
+        * `theta` [float]:
+          Normalization of `S` that corresponds to discovery with significance
+          level `alpha`.
+        """
         SF, n = self._sf_factory(S)
         assert n == 1
         EC = EquivalentCounts(SF)
         return EC.discoveryreach(0, alpha, force_gaussian = force_gaussian)
 
-    def euclideanize(self, S):  # 1-dim
+    def equivalentshapes(self, S):  # 1-dim
+        """Derive equivalent signal and background shapes.
+
+        Parameters
+        ----------
+        * `S` [signal arrays]:
+          Single signal component.
+
+        Returns
+        -------
+        * `eqS` [signal array]:
+          Equivalent signal.
+        * `eqB` [background array]:
+          Equivalent noise.
+        """
         SF, n  = self._sf_factory(S, K_only = True)
         assert n == 1
         ED = EuclideanizedSignal(SF)
@@ -1096,6 +1278,20 @@ class Ronald(object):
         return eS, N
 
     def lnL(self, S, S0):
+        """Profile log-likelihood.
+
+        Paramters
+        ---------
+        * `S` [signal arrays]:
+          Single signal component (model prediction).
+        * `S0` [signal arrays]:
+          Single signal component (mock data).
+
+        Returns
+        -------
+        * `lnL` [float]:
+          Profile log-likelihood.
+        """
         SF, n  = self._sf_factory(S, K_only = True)  # Model point
         SF0, n0  = self._sf_factory(S0, K_only = True)  # Asimov data
         assert n == 1
@@ -1110,20 +1306,12 @@ class Ronald(object):
         return lnL
 
     def getfield(self, Sfunc, ix, iy, x_values, y_values, theta0):
-        # TODO: Make sure that background are correctly added
-        E = self._E
-        K = self._K
-        T = None
-        FF = Funkfish(Sfunc, theta0, E, K, T)
+        FF = self._ff_factory(Sfunc, theta0)
         tf =FF.TensorField(ix, iy, x_values, y_values, theta0 = theta0)
         return tf
 
     def getMinuit(self, Sfunc, theta0, **kwargs):
-        # TODO: Make sure that background are correctly added
-        E = self._E
-        K = self._K
-        T = None
-        FF = Funkfish(Sfunc, theta0, E, K, T)
+        FF = self._ff_factory(Sfunc, theta0)
         M = FF.iminuit(theta0, **kwargs)
         return M
 
@@ -1132,7 +1320,11 @@ class Ronald(object):
             d2 = -2*(self.lnL(S, S0) - self.lnL(S0, S0))
             return d2
         else:
-            eS, N = self.euclideanize(S)
-            eS0, N0 = self.euclideanize(S0)
-            d2 = ((eS-eS0)**2/N0).sum()
+            eS, N = self.equivalentshapes(S)
+            eS0, N0 = self.equivalentshapes(S0)
+            d2 = ((eS-eS0)**2/(N0+N)*2).sum()
             return d2
+
+# TODO:
+# - Make sure Fishpy can be instantiated with arbitrary background and signal
+# functions (linearized background).
