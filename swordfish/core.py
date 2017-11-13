@@ -427,7 +427,8 @@ class Swordfish(object):
             mu += dmu*self._exposure
         self._at_bound = any(mu<mu0*1e-6)
         mu = np.where(mu<mu0*1e-6, mu0*1e-6, mu)
-        lnL = (mu0*np.log(mu)-mu-gammaln(mu0+1)).sum()
+        lnL = (mu0*np.log(mu)-mu-0*gammaln(mu0+1)).sum()
+        #print mu0.sum(), mu.sum()
         lnL -= (0.5*theta**2/self._constraints**2).sum()
         if self._sysflag:
             dense = self._systematics(np.eye(self._nbins))
@@ -500,8 +501,7 @@ class Swordfish(object):
             global fp
             return -fp
         if N == 0.:
-            return self.lnL(theta, theta0, dmu = None, mu_overwrite =
-                    mu_overwrite)
+            return self.lnL(theta, theta0, mu_overwrite = mu_overwrite)
         result = fmin_l_bfgs_b(f, x0, fprime, approx_grad = False)
         if self._verbose:
             print "Best-fit parameters:", result[0]
@@ -527,9 +527,11 @@ class EuclideanizedSignal(object):
         self._model = copy.deepcopy(model)
         self._A0 = None
 
-    def _get_A(self):
+    def _get_A(self, S = None):
         """Return matrix `A`, such that x = A*S is the Eucledian distance vector."""
         noise = self._model._noise.copy()*1.  # Noise without anything extra
+        if S is not None:
+            noise += S
         exposure = self._model._exposure
         spexp = la.aslinearoperator(sp.diags(exposure))
 
@@ -544,7 +546,9 @@ class EuclideanizedSignal(object):
         invD = np.linalg.linalg.inv(D)
         A2 = np.diag(exposure).dot(invD).dot(np.diag(exposure))
         A = sqrtm(A2)
-        return A
+        Kdiag = np.diag(self._model._systematics.dot(np.eye(self._model._nbins)))
+        nA = np.diag(np.sqrt(noise*exposure+Kdiag*exposure**2)).dot(A)
+        return nA
 
     def x(self, i, S):
         """Return model distance vector.
@@ -556,9 +560,7 @@ class EuclideanizedSignal(object):
         * `S` [array-like, shape=(n_bins)]:
             Flux of signal component
         """
-        if self._A0 is None:
-            self._A0 = self._get_A()
-        A = self._A0
+        A = self._get_A(S)
         return A.dot(S)
 
 class EquivalentCounts(object):
@@ -926,6 +928,7 @@ class Funkfish(object):
             mu = self.Swordfish(x).mu()  # Get proper model prediction
             lnL = SF0.profile_lnL(x-x0, x0*0., mu_overwrite = mu)
             return -2*lnL
+        x0 = np.array(x0)
         x0err = np.where(x0>0., x0*0.01, 0.01)
         M = self._init_minuit(chi2, x = x0, x_err = x0err, **kwargs)
         return M
@@ -1087,20 +1090,21 @@ class Ronald(object):
         SF, n  = self._sf_factory(S, K_only = True)
         assert n == 1
         ED = EuclideanizedSignal(SF)
-        N = SF._noise*SF._exposure
-        eS = ED.x(0, S)*np.sqrt(N)
+        Kdiag = np.diag(SF._systematics.dot(np.eye(SF._nbins)))
+        N = (SF._noise+S)*SF._exposure + Kdiag*SF._exposure**2
+        eS = ED.x(0, S)
         return eS, N
 
     def lnL(self, S, S0):
-        SF, n  = self._sf_factory(S)  # Model point
-        SF0, n0  = self._sf_factory(S0)  # Asimov data
+        SF, n  = self._sf_factory(S, K_only = True)  # Model point
+        SF0, n0  = self._sf_factory(S0, K_only = True)  # Asimov data
         assert n == 1
         assert n0 == 1
         ncomp = SF._ncomp
         free_theta = [i != 0 for i in range(ncomp)]
         theta = [1. if i == 0 else 0. for i in range(ncomp)]
         theta0 = theta  # Does not matter, since we use mu_overwrite
-        mu = SF.mu(theta)  # Overwrites model predictions
+        mu = SF.mu(theta)  # Overwrites *model predictions*
         lnL = SF0.profile_lnL(theta, theta0, epsilon = 1e-3, free_theta = free_theta,
                 mu_overwrite = mu)
         return lnL
@@ -1114,13 +1118,13 @@ class Ronald(object):
         tf =FF.TensorField(ix, iy, x_values, y_values, theta0 = theta0)
         return tf
 
-    def getMinuit(self, Sfunc, theta0):
+    def getMinuit(self, Sfunc, theta0, **kwargs):
         # TODO: Make sure that background are correctly added
         E = self._E
         K = self._K
         T = None
         FF = Funkfish(Sfunc, theta0, E, K, T)
-        M = FF.iminuit(theta0)
+        M = FF.iminuit(theta0, **kwargs)
         return M
 
     def Delta(self, S, S0, use_lnL = False):
@@ -1129,6 +1133,6 @@ class Ronald(object):
             return d2
         else:
             eS, N = self.euclideanize(S)
-            eS0, N = self.euclideanize(S0)
-            d2 = ((eS-eS0)**2/(N+eS0)).sum()
+            eS0, N0 = self.euclideanize(S0)
+            d2 = ((eS-eS0)**2/N0).sum()
             return d2
