@@ -933,7 +933,7 @@ class Funkfish(object):
         M = self._init_minuit(chi2, x = x0, x_err = x0err, **kwargs)
         return M
 
-class Ronald(object):
+class Fishpy(object):
     """Signal ."""
     def __init__(self, B, N = None, T = None, E = None, K = None):
         """Constructor.
