@@ -725,6 +725,22 @@ class EquivalentCounts(object):
                 theta_list.append(theta*1.3)
         return np.interp(Z**2/2, z_list, theta_list)
 
+def _func_to_templates(flux, x, dx = None):
+    """Return finite differences for use in SwordFish."""
+    x = np.array(x, dtype='float64')
+    if dx is None:
+        dx = x*0.01+0.001
+    fluxes = []
+    #fluxes.append(flux(*x))
+    for i in range(len(x)):
+        xU = copy.copy(x)
+        xL = copy.copy(x)
+        xU[i] += dx[i]
+        xL[i] -= dx[i]
+        df = (flux(*xU) - flux(*xL))/2./dx[i]
+        fluxes.append(df)
+    return fluxes
+
 
 class Funkfish(object):
     r"""`Swordfish`, `EquivalentCounts` and `iminuit`-factory, based on non-linear models.
@@ -777,23 +793,6 @@ class Funkfish(object):
             return x
         else:
             return self._x0
-
-    @staticmethod
-    def _func_to_templates(flux, x, dx = None):
-        """Return finite differences for use in SwordFish."""
-        x = np.array(x, dtype='float64')
-        if dx is None:
-            dx = x*0.01+0.001
-        fluxes = []
-        #fluxes.append(flux(*x))
-        for i in range(len(x)):
-            xU = copy.copy(x)
-            xL = copy.copy(x)
-            xU[i] += dx[i]
-            xL[i] -= dx[i]
-            df = (flux(*xU) - flux(*xL))/2./dx[i]
-            fluxes.append(df)
-        return fluxes
 
     @staticmethod
     def _init_minuit(f, x = None, x_fix = None, x_err = None, x_lim = None, errordef = 1, **kwargs):
@@ -852,7 +851,7 @@ class Funkfish(object):
         * `SF` [`Swordfish` instance]
         """
         x0 = self._get_x0(theta0)
-        flux = self._func_to_templates(self._f, x0)
+        flux = _func_to_templates(self._f, x0)
         noise = self._f(*x0)
         return Swordfish(flux, noise, self._exposure, self._Sigma, T = self._constraints)
 
@@ -1033,9 +1032,9 @@ class Fishpy(object):
         Ssf = []  # List of "signal" components for Swordfish
         Tsf = []  # Signal component constraints
 
-        Bsf = self._Btot
+        Bsf = copy.deepcopy(self._Btot)
         if extraB is not None:
-            Bsf.append(extraB)
+            Bsf += extraB
 
         # Collect signal components 
         for s in S:
@@ -1305,7 +1304,10 @@ class Fishpy(object):
                 mu_overwrite = mu)
         return lnL
 
-    def getfield(self, Sfunc, ix, iy, x_values, y_values, theta0):
+    def getfield(self, Sfunc, x_values, y_values):
+        ix = 0
+        iy = 1
+        theta0 = [None, None]
         FF = self._ff_factory(Sfunc, theta0)
         tf =FF.TensorField(ix, iy, x_values, y_values, theta0 = theta0)
         return tf
@@ -1324,6 +1326,12 @@ class Fishpy(object):
             eS0, N0 = self.equivalentshapes(S0)
             d2 = ((eS-eS0)**2/(N0+N)*2).sum()
             return d2
+
+    @staticmethod
+    def linearize(Sfunc, x, dx = None):
+        S0 = Sfunc(*x)
+        gradS = _func_to_templates(Sfunc, x, dx)
+        return gradS, S0
 
 # TODO:
 # - Make sure Fishpy can be instantiated with arbitrary background and signal

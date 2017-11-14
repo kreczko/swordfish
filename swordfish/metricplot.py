@@ -475,14 +475,15 @@ class VectorField(object):
                 return xseed
         return None
 
-    def streamlines(self, xinit, mask = None, Nmax = 30, Nsteps = 30, seed =
+    def streamlines(self, xinit = None, mask = None, Nmax = 30, Nsteps = 30, seed =
             None, **kwargs):
         """Plot streamlines.
 
         Parameters
         ---------
         * `xinit` [2-tuple]:
-            Central position.
+            Central position.  If `None`, central position is set to mean of
+            grid.  The central position should be within the unmasked region.
         * `mask` [function]:
             Function of parameters (x,y), returning `False` in masked regions.
         * `Nmax` [integer]:
@@ -499,6 +500,8 @@ class VectorField(object):
         * `lines` [list of 2-D array]:
             Generated streamlines.
         """
+        if xinit is None:
+            xinit = [self.x.mean(), self.y.mean()]
         lines = []
         xseed = xinit
         if seed is not None:
